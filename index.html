@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Pebble</title>
+
+  <!-- PWA Meta -->
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Pebble">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
+
+  <!-- App Script -->
+  <script src="script.js" defer></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+</head>
+<body>
+
+  <!-- ============================================================
+       SCREEN 1: HOME (Dashboard + History)
+       ============================================================ -->
+  <main id="home-screen" class="screen" aria-label="Home">
+
+    <!-- ==================== HEADER ==================== -->
+    <header id="home-header" class="app-header">
+      <h1 class="app-title">Pebble</h1>
+      <button
+        id="open-settings-btn"
+        class="icon-btn"
+        aria-label="Settings"
+        aria-haspopup="dialog"
+        aria-controls="settings-panel"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-settings2-icon lucide-settings-2" aria-hidden="true"><path d="M14 17H5"/><path d="M19 7h-9"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>
+      </button>
+    </header>
+
+    <!-- ==================== MONTHLY SPENDING CARD ==================== -->
+    <section id="monthly-spending-card" class="card" aria-label="Monthly Spending">
+      <p class="card-label">This Month</p>
+      <p id="monthly-spending-amount" class="card-amount">₹0</p>
+    </section>
+
+    <!-- ==================== REMAINING BUDGET CARD ==================== -->
+    <section
+      id="remaining-budget-card"
+      class="card"
+      aria-label="Remaining Budget. Tap to edit monthly budget."
+      role="button"
+      tabindex="0"
+    >
+      <p class="card-label">Remaining Budget</p>
+      <p id="remaining-budget-amount" class="card-amount">₹0</p>
+      <div id="budget-progress-track" class="progress-track" role="progressbar" aria-label="Budget used">
+        <div id="budget-progress-fill" class="progress-fill"></div>
+      </div>
+    </section>
+
+    <!-- ==================== CATEGORY SUMMARY ==================== -->
+    <section id="category-summary" class="card" aria-label="Category Summary">
+      <p class="card-label">Categories</p>
+      <ul id="category-summary-list" class="category-list">
+        <!-- Category summary items injected by script.js -->
+      </ul>
+    </section>
+
+    <!-- ==================== CHART CONTAINER ==================== -->
+    <section id="chart-container" class="card" aria-label="Spending Chart">
+      <canvas id="spending-chart"></canvas>
+    </section>
+
+    <!-- ==================== HISTORY FILTERS ==================== -->
+    <nav id="history-filters" class="filters" aria-label="History Filters">
+      <button class="filter-btn filter-btn-active" data-filter="today" aria-label="Filter: Today" aria-current="true">Today</button>
+      <button class="filter-btn" data-filter="week" aria-label="Filter: Week">Week</button>
+      <button class="filter-btn" data-filter="month" aria-label="Filter: Month">Month</button>
+      <button class="filter-btn" data-filter="year" aria-label="Filter: Year">Year</button>
+      <button class="filter-btn" data-filter="all" aria-label="Filter: All">All</button>
+      <button class="filter-btn" data-filter="custom" aria-label="Filter: Custom date range">Custom</button>
+    </nav>
+
+    <!-- ==================== FILTER SUBTITLE ==================== -->
+    <p id="filter-description" class="filter-description" aria-live="polite" hidden></p>
+
+    <!-- ==================== EXPENSE HISTORY ==================== -->
+    <section id="expense-history" aria-label="Expense History">
+      <ul id="expense-history-list" class="expense-list">
+        <!-- Expense entries injected by script.js -->
+
+        <!--
+          EXAMPLE EXPENSE CARD (reference only — not rendered, for future development)
+          <li class="expense-item" data-expense-id="">
+            <span class="expense-category-icon" aria-hidden="true">🍔</span>
+            <div class="expense-details">
+              <p class="expense-category-name">Food</p>
+              <p class="expense-note">Lunch with friends</p>
+            </div>
+            <p class="expense-amount">₹250</p>
+            <button type="button" class="expense-menu-btn" aria-label="Expense options" aria-haspopup="true">
+              <span class="expense-menu-icon">⋮</span>
+            </button>
+            <div class="expense-menu" role="menu" hidden>
+              <button type="button" class="expense-menu-item" role="menuitem" data-action="edit">Edit</button>
+              <button type="button" class="expense-menu-item" role="menuitem" data-action="delete">Delete</button>
+            </div>
+          </li>
+        -->
+      </ul>
+      <p id="expense-history-empty" class="empty-state" hidden>No expenses yet</p>
+    </section>
+
+    <!-- ==================== FLOATING ADD BUTTON ==================== -->
+    <button id="add-expense-fab" class="fab" aria-label="Add Expense">
+      <span class="fab-icon">+</span>
+    </button>
+
+  </main>
+
+  <!-- ============================================================
+       SCREEN 2: ADD EXPENSE
+       ============================================================ -->
+  <section id="add-expense-screen" class="screen screen-hidden" aria-label="Add Expense">
+
+    <!-- ==================== BACK ARROW ==================== -->
+    <header class="add-expense-header">
+      <button id="back-to-home-btn" class="back-btn" aria-label="Back">
+        <span class="back-icon">&#8592;</span>
+      </button>
+      <!-- ==================== PAGE TITLE ==================== -->
+      <h2 id="add-expense-title" class="add-expense-title">Add Expense</h2>
+    </header>
+
+    <!-- ==================== ADD EXPENSE FORM ==================== -->
+    <form id="add-expense-form" novalidate>
+
+      <!-- Native Amount Input (type="number" with decimal support) -->
+      <div class="amount-input-wrap">
+        <span class="currency-symbol">₹</span>
+        <input
+          type="number"
+          id="expense-amount-input"
+          name="amount"
+          class="amount-input"
+          inputmode="decimal"
+          enterkeyhint="done"
+          step="0.01"
+          min="0"
+          placeholder="0"
+          required
+          autocomplete="off"
+          aria-label="Expense amount"
+        >
+      </div>
+
+      <!--
+        CATEGORY COLOR MAPPING (documentation only — CSS and JS must follow this mapping)
+        Food          -> Orange
+        Transport     -> Blue
+        Shopping      -> Yellow
+        Health        -> Green
+        College       -> Purple
+        Hostel        -> Cyan
+        Entertainment -> Pink
+        Others        -> Gray
+      -->
+
+      <!-- Category Selector -->
+      <div id="category-selector" class="category-selector" role="group" aria-label="Category">
+        <button type="button" class="category-btn" data-category="food" aria-label="Food">
+          <span class="category-icon">🍔</span>
+          <span class="category-name">Food</span>
+        </button>
+        <button type="button" class="category-btn" data-category="transport" aria-label="Transport">
+          <span class="category-icon">🚕</span>
+          <span class="category-name">Transport</span>
+        </button>
+        <button type="button" class="category-btn" data-category="shopping" aria-label="Shopping">
+          <span class="category-icon">🛍</span>
+          <span class="category-name">Shopping</span>
+        </button>
+        <button type="button" class="category-btn" data-category="entertainment" aria-label="Entertainment">
+          <span class="category-icon">🎬</span>
+          <span class="category-name">Entertainment</span>
+        </button>
+        <button type="button" class="category-btn" data-category="college" aria-label="College">
+          <span class="category-icon">📚</span>
+          <span class="category-name">College</span>
+        </button>
+        <button type="button" class="category-btn" data-category="health" aria-label="Health">
+          <span class="category-icon">💊</span>
+          <span class="category-name">Health</span>
+        </button>
+        <button type="button" class="category-btn" data-category="hostel" aria-label="Hostel">
+          <span class="category-icon">🏠</span>
+          <span class="category-name">Hostel</span>
+        </button>
+        <button type="button" class="category-btn" data-category="others" aria-label="Others">
+          <span class="category-icon">✨</span>
+          <span class="category-name">Others</span>
+        </button>
+      </div>
+      <input type="hidden" id="expense-category-input" name="category" required aria-label="Selected category">
+
+      <!-- Optional Note -->
+      <div class="note-input-wrap">
+        <input
+          type="text"
+          id="expense-note-input"
+          name="note"
+          class="note-input"
+          placeholder="Add a note (optional)"
+          autocomplete="off"
+        >
+      </div>
+
+      <!-- Save Button -->
+      <button type="submit" id="save-expense-btn" class="save-btn">Save</button>
+
+    </form>
+
+  </section>
+
+  <!-- ============================================================
+       MONTHLY BUDGET BOTTOM SHEET
+       Hidden by default. Opens when the Remaining Budget card
+       is tapped. JavaScript will control visibility later.
+       ============================================================ -->
+  <div id="budget-sheet-overlay" class="sheet-overlay sheet-hidden" hidden>
+    <section
+      id="budget-sheet"
+      class="bottom-sheet"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="budget-sheet-title"
+    >
+      <!-- Title -->
+      <h2 id="budget-sheet-title" class="bottom-sheet-title">Monthly Budget</h2>
+
+      <!-- Number Input -->
+      <form id="budget-sheet-form">
+        <div class="amount-input-wrap">
+          <span class="currency-symbol">₹</span>
+          <input
+            type="number"
+            id="budget-amount-input"
+            name="budget"
+            class="amount-input"
+            inputmode="decimal"
+            enterkeyhint="done"
+            step="0.01"
+            min="0"
+            placeholder="0"
+            required
+            autocomplete="off"
+            aria-label="Monthly budget amount"
+          >
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="bottom-sheet-actions">
+          <button type="button" id="budget-cancel-btn" class="cancel-btn" aria-label="Cancel">Cancel</button>
+          <button type="submit" id="budget-save-btn" class="save-btn" aria-label="Save budget">Save</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <!-- ============================================================
+       CUSTOM DATE RANGE SHEET
+       Hidden by default. Opens when the "Custom" filter button is
+       tapped. JavaScript controls visibility, validation, and
+       applying the range.
+       ============================================================ -->
+  <div id="custom-range-sheet-overlay" class="sheet-overlay sheet-hidden" hidden>
+    <section
+      id="custom-range-sheet"
+      class="bottom-sheet"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="custom-range-sheet-title"
+    >
+      <!-- Title -->
+      <h2 id="custom-range-sheet-title" class="bottom-sheet-title">Custom Range</h2>
+
+      <!-- From / To Date Fields -->
+      <form id="custom-range-form">
+        <div class="date-range-fields">
+          <div class="date-field">
+            <label for="custom-range-from" class="date-field-label">From</label>
+            <input
+              type="date"
+              id="custom-range-from"
+              name="from"
+              class="date-input"
+              required
+              aria-label="From date"
+            >
+          </div>
+          <div class="date-field">
+            <label for="custom-range-to" class="date-field-label">To</label>
+            <input
+              type="date"
+              id="custom-range-to"
+              name="to"
+              class="date-input"
+              required
+              aria-label="To date"
+            >
+          </div>
+        </div>
+
+        <!-- Validation Message -->
+        <p id="custom-range-error" class="field-error" role="alert" hidden></p>
+
+        <!-- Action Buttons -->
+        <div class="bottom-sheet-actions">
+          <button type="button" id="custom-range-cancel-btn" class="cancel-btn" aria-label="Cancel">Cancel</button>
+          <button type="submit" id="custom-range-apply-btn" class="save-btn" aria-label="Apply custom date range">Apply</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <!-- ============================================================
+       SETTINGS PANEL (right-side slide-over)
+       Hidden by default. Opens when the Settings icon in the Home
+       header is tapped. JavaScript controls visibility, the
+       Export Data / About Pebble accordions, and CSV export.
+       ============================================================ -->
+  <div id="settings-overlay" class="settings-overlay settings-hidden" hidden>
+    <aside
+      id="settings-panel"
+      class="settings-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="settings-panel-title"
+    >
+      <header class="settings-panel-header">
+        <h2 id="settings-panel-title" class="settings-panel-title">Settings</h2>
+        <button id="close-settings-btn" class="icon-btn" aria-label="Close settings">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </header>
+
+      <div class="settings-panel-body">
+
+        <!-- ==================== EXPORT DATA ==================== -->
+        <section class="settings-section">
+          <button
+            type="button"
+            id="export-data-toggle"
+            class="settings-section-toggle"
+            aria-expanded="false"
+            aria-controls="export-data-panel"
+          >
+            <span>Export Data</span>
+            <svg class="settings-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <div id="export-data-panel" class="settings-section-panel">
+            <div class="settings-section-panel-inner">
+              <p class="settings-section-description">Export your expense history</p>
+              <button type="button" id="export-csv-btn" class="save-btn">Export as CSV</button>
+              <p id="export-empty-message" class="settings-empty-message" hidden>Nothing to export yet — add an expense first.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== ABOUT PEBBLE ==================== -->
+        <section class="settings-section">
+          <button
+            type="button"
+            id="about-pebble-toggle"
+            class="settings-section-toggle"
+            aria-expanded="false"
+            aria-controls="about-pebble-panel"
+          >
+            <span>About Pebble</span>
+            <svg class="settings-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <div id="about-pebble-panel" class="settings-section-panel">
+            <div class="settings-section-panel-inner">
+              <p class="settings-section-description">Pebble is a minimal personal expense tracker built to make everyday money management simple, fast and distraction-free. Every feature is designed to stay out of your way so tracking expenses becomes a daily habit.</p>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+      <footer class="settings-panel-footer">
+        <p class="settings-footer-credit">Made with ❤️ by Aman</p>
+        <p class="settings-footer-version">Version 1.0</p>
+      </footer>
+    </aside>
+  </div>
+
+</body>
+</html>

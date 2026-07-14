@@ -1,0 +1,1198 @@
+/* ================================================================
+   PEBBLE — style.css
+   Premium minimal expense tracker.
+   Design language: Apple HIG-inspired. Dark, calm, uncluttered.
+   ================================================================ */
+
+
+/* ================================================================
+   1. RESET
+   ================================================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  scroll-behavior: smooth;
+  color-scheme: dark;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+input {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+}
+
+ul {
+  list-style: none;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+img, svg, canvas {
+  display: block;
+  max-width: 100%;
+}
+
+
+/* ================================================================
+   2. VARIABLES
+   ================================================================ */
+
+:root {
+  /* ---- Core colors ---- */
+  --color-bg: #000000;
+  --color-card: #111111;
+  --color-surface: #181818;
+  --color-border: #242424;
+
+  --color-text-primary: #FFFFFF;
+  --color-text-secondary: #A1A1AA;
+  --color-text-disabled: #6B7280;
+
+  --color-success: #22C55E;
+  --color-warning: #FACC15;
+  --color-danger: #EF4444;
+
+  /* ---- Category colors ---- */
+  --category-food: #F97316;          /* Orange */
+  --category-transport: #3B82F6;     /* Blue */
+  --category-shopping: #FACC15;      /* Yellow */
+  --category-health: #22C55E;        /* Green */
+  --category-college: #A855F7;       /* Purple */
+  --category-hostel: #06B6D4;        /* Cyan */
+  --category-entertainment: #EC4899; /* Pink */
+  --category-others: #9CA3AF;        /* Gray */
+
+  /* ---- Typography ---- */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text',
+                 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+
+  --font-size-app-title: 32px;
+  --font-size-section-title: 20px;
+  --font-size-card-label: 14px;
+  --font-size-card-amount: 36px;
+  --font-size-body: 16px;
+  --font-size-small: 13px;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* ---- Spacing (8px system) ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 32px;
+  --space-6: 40px;
+  --space-7: 48px;
+
+  /* ---- Radius ---- */
+  --radius-card: 20px;
+  --radius-button: 16px;
+  --radius-fab: 50%;
+  --radius-sheet: 28px;
+  --radius-input: 16px;
+
+  /* ---- Motion ---- */
+  --transition-fast: 180ms ease;
+  --transition-base: 220ms ease;
+
+  /* ---- Layout ---- */
+  --max-content-width: 480px;
+  --fab-size: 64px;
+}
+
+
+/* ================================================================
+   3. BASE
+   ================================================================ */
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-regular);
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+h1, h2, h3 {
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.2;
+}
+
+::selection {
+  background: #FFFFFF;
+  color: #000000;
+}
+
+/* Hide scrollbars while keeping scroll functional */
+body,
+#expense-history {
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;     /* IE / Edge */
+}
+
+body::-webkit-scrollbar,
+#expense-history::-webkit-scrollbar {
+  display: none;                /* Chrome / Safari */
+}
+
+
+/* ================================================================
+   4. LAYOUT
+   ================================================================ */
+
+.screen {
+  width: 100%;
+  max-width: var(--max-content-width);
+  margin: 0 auto;
+  min-height: 100vh;
+  padding:
+    max(var(--space-4), env(safe-area-inset-top))
+    var(--space-3)
+    max(var(--space-7), env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  position: relative;
+}
+
+.screen-hidden {
+  display: none;
+}
+
+/* Center the app on tablets and desktops */
+@media (min-width: 481px) {
+  body {
+    background:#000000;
+  }
+
+  .screen {
+    border-left: 1px solid var(--color-border);
+    border-right: 1px solid var(--color-border);
+    min-height: 100vh;
+  }
+}
+
+
+/* ================================================================
+   5. CARDS
+   ================================================================ */
+
+.card {
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.card-label {
+  font-size: var(--font-size-card-label);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  letter-spacing: 0.2px;
+}
+
+.card-amount {
+  font-size: var(--font-size-card-amount);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -0.5px;
+}
+
+/* Remaining Budget card doubles as a tap target for the bottom sheet */
+#remaining-budget-card {
+  cursor: pointer;
+  transition: background-color var(--transition-fast), transform var(--transition-fast);
+}
+
+#remaining-budget-card:hover {
+  background-color: var(--color-surface);
+}
+
+#remaining-budget-card:active {
+  transform: scale(0.98);
+}
+
+#remaining-budget-card:focus-visible {
+  outline: 2px solid var(--color-text-primary);
+  outline-offset: 2px;
+}
+
+.progress-track {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background-color: var(--color-surface);
+  overflow: hidden;
+  margin-top: var(--space-2);
+}
+
+.progress-fill {
+  height: 100%;
+  width: 0%;
+  background-color: var(--color-success);
+  border-radius: 999px;
+  transition: width var(--transition-base);
+}
+.progress-segment {
+  height: 100%;
+  transition:
+    width var(--transition-base),
+    background-color var(--transition-base);
+}
+
+/* Category Summary */
+.category-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+/* Chart container */
+#chart-container {
+  padding: var(--space-4);
+  min-height: 220px;
+  align-items: stretch;
+  justify-content: center;
+}
+
+#spending-chart {
+  width: 100% !important;
+  max-height: 260px;
+}
+
+
+/* ================================================================
+   6. HEADER
+   ================================================================ */
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) 0;
+}
+
+.app-title {
+  font-size: var(--font-size-app-title);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -0.5px;
+}
+
+.add-expense-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+}
+
+.add-expense-title {
+  font-size: var(--font-size-section-title);
+  font-weight: var(--font-weight-semibold);
+}
+
+
+/* ================================================================
+   7. BUTTONS
+   ================================================================ */
+
+/* -- Back button -- */
+.back-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background-color: var(--color-surface);
+  transition: background-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.back-btn:hover {
+  background-color: var(--color-border);
+}
+
+.back-btn:active {
+  transform: scale(0.92);
+}
+
+.back-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+/* -- Filter buttons (segmented chips) -- */
+.filters {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  padding-bottom: var(--space-1);
+  scrollbar-width: none;
+}
+
+.filters::-webkit-scrollbar {
+  display: none;
+}
+
+.filter-btn {
+  flex: 0 0 auto;
+  padding: var(--space-2) var(--space-3);
+  border-radius: 999px;
+  background-color: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  border: 1px solid transparent;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.filter-btn:hover {
+  background-color: var(--color-border);
+}
+
+.filter-btn-active,
+.filter-btn[aria-current="true"] {
+  background-color: var(--color-text-primary);
+  color: #000000;
+  font-weight: var(--font-weight-semibold);
+}
+
+/* -- Filter subtitle (Phase 7.6) -- */
+.filter-description {
+  font-size: var(--font-size-small);
+  color: var(--color-text-secondary);
+  padding: 0 var(--space-1);
+}
+
+/* -- Save / Cancel buttons -- */
+.save-btn {
+  width: 100%;
+  padding: var(--space-3);
+  border-radius: var(--radius-button);
+  background-color: var(--color-text-primary);
+  color: #000000;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+  text-align: center;
+  transition: transform var(--transition-fast), opacity var(--transition-fast);
+}
+
+.save-btn:hover {
+  opacity: 0.9;
+}
+
+.save-btn:active {
+  transform: scale(0.98);
+}
+
+.cancel-btn {
+  width: 100%;
+  padding: var(--space-3);
+  border-radius: var(--radius-button);
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  text-align: center;
+  transition: background-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.cancel-btn:hover {
+  background-color: var(--color-border);
+}
+
+.cancel-btn:active {
+  transform: scale(0.98);
+}
+
+/* -- Floating Action Button -- */
+.fab {
+  position: fixed;
+  bottom: var(--space-5);
+  left: 50%;
+  transform: translateX(-50%);
+  width: var(--fab-size);
+  height: var(--fab-size);
+  border-radius: var(--radius-fab);
+  background-color: var(--color-text-primary);
+  color: #000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  transition:
+  transform var(--transition-fast),
+  background-color var(--transition-fast);
+}
+
+.fab:hover {
+  transform: translateX(-50%) scale(1.04);
+}
+
+.fab:active {
+  transform: translateX(-50%) scale(0.94);
+}
+
+.fab-icon {
+  font-size: 30px;
+  font-weight: var(--font-weight-regular);
+  line-height: 1;
+}
+
+
+/* ================================================================
+   8. FORMS
+   ================================================================ */
+
+/* -- Amount input -- */
+.amount-input-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  padding: var(--space-5) var(--space-3);
+}
+
+.currency-symbol {
+  font-size: var(--font-size-card-amount);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.amount-input {
+  width: auto;
+  max-width: 260px;
+  text-align: center;
+  font-size: 56px;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -1px;
+  background: transparent;
+  caret-color: var(--color-text-primary);
+}
+
+.amount-input::placeholder {
+  color: var(--color-text-disabled);
+}
+.amount-input:focus {
+    outline: none;
+}
+
+/* Remove native number spinners */
+.amount-input::-webkit-outer-spin-button,
+.amount-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.amount-input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: none;
+}
+
+/* -- Category selector -- */
+.category-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+}
+
+.category-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-radius: 999px;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  transition: background-color var(--transition-fast),
+              border-color var(--transition-fast),
+              transform var(--transition-fast);
+}
+
+.category-btn:hover {
+  background-color: var(--color-border);
+}
+
+.category-btn:active {
+  transform: scale(0.96);
+}
+
+.category-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.category-name {
+  line-height: 1;
+}
+
+/* Selected state — visually obvious, each category keeps its own color as an accent ring */
+.category-btn.category-btn-selected {
+  color: var(--color-text-primary);
+  background-color: var(--color-card);
+  border-color: currentColor;
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+
+.category-btn[data-category="food"].category-btn-selected               { color: var(--category-food); }
+.category-btn[data-category="transport"].category-btn-selected          { color: var(--category-transport); }
+.category-btn[data-category="shopping"].category-btn-selected           { color: var(--category-shopping); }
+.category-btn[data-category="health"].category-btn-selected             { color: var(--category-health); }
+.category-btn[data-category="college"].category-btn-selected            { color: var(--category-college); }
+.category-btn[data-category="hostel"].category-btn-selected             { color: var(--category-hostel); }
+.category-btn[data-category="entertainment"].category-btn-selected      { color: var(--category-entertainment); }
+.category-btn[data-category="others"].category-btn-selected             { color: var(--category-others); }
+
+/* -- Note input -- */
+.note-input-wrap {
+  padding: 0;
+}
+
+.note-input {
+  width: 100%;
+  padding: var(--space-3);
+  border-radius: var(--radius-input);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  font-size: var(--font-size-body);
+  transition:
+  border-color var(--transition-fast),
+  background-color var(--transition-fast);
+}
+
+.note-input::placeholder {
+  color: var(--color-text-disabled);
+}
+
+.note-input:focus {
+  outline: none;
+  border-color: var(--color-text-secondary);
+}
+
+#add-expense-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  flex: 1;
+}
+
+#save-expense-btn {
+  margin-top: auto;
+}
+
+
+/* ================================================================
+   9. BOTTOM SHEET
+   ================================================================ */
+
+.sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 40;
+  opacity: 1;
+  transition: opacity var(--transition-base);
+}
+
+.sheet-overlay[hidden] {
+  display: none;
+}
+
+.sheet-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.bottom-sheet {
+  width: 100%;
+  max-width: var(--max-content-width);
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-bottom: none;
+  border-top-left-radius: var(--radius-sheet);
+  border-top-right-radius: var(--radius-sheet);
+  padding: var(--space-4) var(--space-4) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  text-align: center;
+  transform: translateY(0);
+  transition: transform var(--transition-base);
+}
+
+.sheet-hidden .bottom-sheet {
+  transform: translateY(100%);
+}
+
+.bottom-sheet-title {
+  font-size: var(--font-size-section-title);
+  font-weight: var(--font-weight-semibold);
+}
+
+#budget-sheet-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.bottom-sheet-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.bottom-sheet-actions .cancel-btn,
+.bottom-sheet-actions .save-btn {
+  flex: 1;
+}
+
+/* -- Custom date range fields (reuses the bottom sheet shell) -- */
+#custom-range-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.date-range-fields {
+  width: 100%;
+  display: flex;
+  gap: var(--space-2);
+}
+
+.date-field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  text-align: left;
+}
+
+.date-field-label {
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.date-input {
+  width: 100%;
+  padding: var(--space-3);
+  border-radius: var(--radius-input);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  font-size: var(--font-size-body);
+  color: var(--color-text-primary);
+  transition: border-color var(--transition-fast);
+}
+
+.date-input:focus {
+  outline: none;
+  border-color: var(--color-text-secondary);
+}
+
+.field-error {
+  width: 100%;
+  text-align: left;
+  font-size: var(--font-size-small);
+  color: var(--color-danger);
+}
+
+.field-error[hidden] {
+  display: none;
+}
+
+
+/* ================================================================
+   10. EXPENSE CARDS
+   ================================================================ */
+
+.expense-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.expense-item {
+  position: relative;
+
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  transition: background-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.expense-item:hover {
+  background-color: var(--color-surface);
+}
+
+.expense-item:active {
+  transform: scale(0.99);
+}
+
+.expense-category-icon {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background-color: var(--color-surface);
+  font-size: 18px;
+}
+
+.expense-details {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.expense-category-name {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.expense-note {
+  font-size: var(--font-size-small);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.expense-amount {
+  flex: 0 0 auto;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+}
+
+.expense-menu-btn {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--color-text-secondary);
+  transition: background-color var(--transition-fast);
+}
+
+.expense-menu-btn:hover {
+  background-color: var(--color-border);
+}
+
+.expense-menu-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.expense-menu {
+  position: absolute;
+  right: var(--space-3);
+  margin-top: var(--space-6);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-button);
+  overflow: hidden;
+  min-width: 140px;
+  z-index: 10;
+}
+
+.expense-menu[hidden] {
+  display: none;
+}
+
+.expense-menu-item {
+  width: 100%;
+  padding: var(--space-3);
+  text-align: left;
+  font-size: var(--font-size-body);
+  transition: background-color var(--transition-fast);
+}
+
+.expense-menu-item:hover {
+  background-color: var(--color-border);
+}
+
+.expense-menu-item[data-action="delete"] {
+  color: var(--color-danger);
+}
+
+/* -- Category icon accent colors -- */
+.expense-item[data-category="food"] .expense-category-icon               { color: var(--category-food); }
+.expense-item[data-category="transport"] .expense-category-icon          { color: var(--category-transport); }
+.expense-item[data-category="shopping"] .expense-category-icon           { color: var(--category-shopping); }
+.expense-item[data-category="health"] .expense-category-icon             { color: var(--category-health); }
+.expense-item[data-category="college"] .expense-category-icon            { color: var(--category-college); }
+.expense-item[data-category="hostel"] .expense-category-icon             { color: var(--category-hostel); }
+.expense-item[data-category="entertainment"] .expense-category-icon      { color: var(--category-entertainment); }
+.expense-item[data-category="others"] .expense-category-icon             { color: var(--category-others); }
+
+
+/* ================================================================
+   11. ANALYTICS
+   ================================================================ */
+
+/* Category Summary rows (populated by script.js inside .category-list) */
+.category-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-1) 0;
+  font-size: var(--font-size-small);
+}
+
+.category-summary-row .category-summary-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-secondary);
+}
+
+.category-summary-row .category-summary-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.category-summary-row .category-summary-amount {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
+
+/* ================================================================
+   12. UTILITIES
+   ================================================================ */
+
+.empty-state {
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-body);
+  padding: var(--space-6) var(--space-3);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:12px;
+}
+
+/* Without this, [hidden]'s default display:none loses the cascade
+   to .empty-state's own display:flex above (equal specificity,
+   author rule wins by source order) — the element stayed visible
+   even when the `hidden` attribute/property was true. Same fix
+   already applied to .sheet-overlay, .field-error, .expense-menu. */
+.empty-state[hidden] {
+  display: none;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Consistent focus visibility across interactive elements */
+button:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--color-text-primary);
+  outline-offset: 2px;
+}
+
+
+/* ================================================================
+   13. RESPONSIVE
+   ================================================================ */
+
+@media (max-width: 360px) {
+  :root {
+    --font-size-app-title: 28px;
+    --font-size-card-amount: 30px;
+  }
+
+  .amount-input {
+    font-size: 46px;
+  }
+
+  .date-range-fields {
+    flex-direction: column;
+  }
+}
+
+@media (min-width: 481px) {
+  .fab {
+    bottom: var(--space-6);
+  }
+}
+
+
+/* ================================================================
+   14. SETTINGS PANEL (PHASE 10)
+   Right-side slide-over, separate from the bottom-sheet pattern in
+   section 9 (those slide up from the bottom and cover the full
+   width; this slides in from the right and covers ~80%). Reuses
+   existing tokens (--transition-base, --radius-*, --space-*, card
+   colors) rather than introducing a new palette.
+   ================================================================ */
+
+/* -- Icon button (Settings icon in the header, Close in the panel) -- */
+.icon-btn {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  transition: background-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.icon-btn:hover {
+  background-color: var(--color-border);
+}
+
+.icon-btn:active {
+  transform: scale(0.92);
+}
+
+/* -- Overlay: dims + blurs the Home screen behind the panel -- */
+.settings-overlay {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: var(--max-content-width);
+  display: flex;
+  justify-content: flex-end;
+  background-color: rgba(0, 0, 0, 0.45);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  z-index: 50;
+  opacity: 1;
+  transition: opacity 300ms ease-out;
+}
+
+.settings-overlay[hidden] {
+  display: none;
+}
+
+.settings-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* While the panel is closing/closed, its own blur+dim shouldn't
+   still visually apply — .settings-hidden's opacity: 0 fades this
+   whole layer out, backdrop-filter included. */
+
+/* -- The panel itself -- */
+.settings-panel {
+  width: min(80%, 420px);
+  height: 100%;
+  background-color: var(--color-card);
+  border-left: 1px solid var(--color-border);
+  border-top-left-radius: var(--radius-sheet);
+  border-bottom-left-radius: var(--radius-sheet);
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  transform: translateX(0);
+  transition: transform 300ms ease-out;
+}
+
+.settings-hidden .settings-panel {
+  transform: translateX(100%);
+}
+
+.settings-panel-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-4) var(--space-3);
+}
+
+.settings-panel-title {
+  font-size: var(--font-size-section-title);
+  font-weight: var(--font-weight-semibold);
+}
+
+.settings-panel-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 0 var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* -- Accordion sections -- */
+.settings-section {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.settings-section:last-child {
+  border-bottom: none;
+}
+
+.settings-section-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) 0;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  text-align: left;
+}
+
+.settings-chevron {
+  flex: 0 0 auto;
+  color: var(--color-text-secondary);
+  transition: transform var(--transition-base);
+}
+
+.settings-section-toggle[aria-expanded="true"] .settings-chevron {
+  transform: rotate(180deg);
+}
+
+/* Height is measured and set inline by setupAccordion() in
+   script.js (via scrollHeight) — this transition is what makes that
+   inline change animate instead of jumping instantly. */
+.settings-section-panel {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 300ms ease-out;
+}
+
+.settings-section-panel-inner {
+  padding-bottom: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.settings-section-description {
+  font-size: var(--font-size-small);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.settings-empty-message {
+  font-size: var(--font-size-small);
+  color: var(--color-text-disabled);
+  text-align: center;
+}
+
+.settings-empty-message[hidden] {
+  display: none;
+}
+
+#export-csv-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#export-csv-btn:disabled:hover {
+  opacity: 0.5;
+}
+
+/* -- Footer: pinned below the scrollable body, never overlapped -- */
+.settings-panel-footer {
+  flex: 0 0 auto;
+  padding: var(--space-3) var(--space-4)
+    max(var(--space-4), env(safe-area-inset-bottom));
+  border-top: 1px solid var(--color-border);
+  text-align: center;
+}
+
+.settings-footer-credit {
+  font-size: var(--font-size-small);
+  color: var(--color-text-secondary);
+}
+
+.settings-footer-version {
+  font-size: var(--font-size-small);
+  color: var(--color-text-disabled);
+  margin-top: var(--space-1);
+}
