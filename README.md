@@ -2,6 +2,13 @@
 
 A minimalist, offline-first expense tracker built for people who want to record expenses in seconds—not minutes.
 
+## 🚀 Live Demo
+
+**Try Pebble here:**  
+https://aman-lab1.github.io/Pebble/
+
+> For the best experience, install Pebble as a Progressive Web App (installation instructions are provided below).
+
 Pebble focuses on speed, simplicity, and privacy. No accounts, no ads, no unnecessary features—just a beautiful experience for tracking daily expenses.
 
 ---
@@ -9,35 +16,37 @@ Pebble focuses on speed, simplicity, and privacy. No accounts, no ads, no unnece
 ## ✨ Features
 
 - 💸 Quick expense logging
-- 📊 Monthly spending dashboard
 - 🎯 Monthly budget tracking
+- 📊 Monthly spending dashboard
 - 📈 Spending analytics with charts
 - 🗂 Category-wise expense breakdown
-- 🔍 History filters
+- 🔍 Expense history filters
   - Today
   - Week
   - Month
   - Year
+  - All
   - Custom Range
-- ✏ Edit and delete expenses
+- ✏️ Edit and delete expenses
 - 📤 Export expense history as CSV
 - 📱 Installable Progressive Web App (PWA)
-- 🌐 Offline support
-- 💾 Local-first storage (your data stays on your device)
+- 🌐 Works completely offline
+- 💾 Local-first storage (your data never leaves your device)
 
 ---
 
-## 📱 Built as a Progressive Web App
+## 📱 Progressive Web App
 
 Pebble can be installed directly from your browser.
 
 Once installed, it behaves like a native mobile app with:
 
-- Home screen icon
+- Home screen installation
 - Full-screen experience
 - Portrait layout
 - Offline functionality
 - Fast startup
+- Automatic updates (when connected to the internet)
 
 ---
 
@@ -48,19 +57,21 @@ Once installed, it behaves like a native mobile app with:
 - Vanilla JavaScript (ES6+)
 - Chart.js
 - LocalStorage
-- Progressive Web App (Manifest + Service Worker)
+- Progressive Web App
+  - Web App Manifest
+  - Service Worker
 
 ---
 
 ## 🎨 Design Philosophy
 
-Pebble is inspired by minimal design principles.
+Pebble is inspired by Apple's Human Interface Guidelines and minimalist design principles.
 
-The goal is simple:
+The philosophy is simple:
 
 > Spend less time tracking your money, and more time living your life.
 
-Every interaction is designed to be fast, clean, and distraction-free.
+Every interaction is designed to be fast, clean, distraction-free, and usable entirely offline.
 
 ---
 
@@ -70,28 +81,69 @@ Every interaction is designed to be fast, clean, and distraction-free.
 
 - Expense tracking
 - Budget management
-- Analytics dashboard
+- Spending dashboard
+- Analytics charts
 - CSV export
 - Offline support
 - Installable PWA
 
-### 🔜 Future Ideas
+### 🔜 Planned Features
 
-- Cloud backup & sync
+- Payment method tracking (Cash / Digital)
+- Spending insights
+- Analytics page
+- Cloud backup (optional)
 - Multiple wallets
 - Recurring expenses
-- Spending insights
-- Themes
 - Import from CSV
+- Themes
 - Multi-currency support
+
+---
+
+## 📲 Install Pebble
+
+Pebble is a **Progressive Web App (PWA)**, so you can install it directly from your browser—no App Store or Play Store required.
+
+### 🍎 iPhone / iPad (Safari)
+
+1. Open Pebble in **Safari**:
+   https://aman-lab1.github.io/Pebble/
+2. Tap the **Share** button (⬆️).
+3. Scroll down and tap **Add to Home Screen**.
+4. Tap **Add**.
+
+Pebble will now appear on your Home Screen and launch like a native app.
+
+---
+
+### 🤖 Android (Chrome)
+
+1. Open Pebble in **Google Chrome**:
+   https://aman-lab1.github.io/Pebble/
+2. Tap the **⋮** (three-dot menu).
+3. Tap **Install and Create Shortcut**.
+4. Confirm by tapping **Install**.
+
+Pebble will now launch as a standalone app from your Home Screen.
+
+---
+
+### ✨ Why install it?
+
+When installed, Pebble provides:
+
+- 📱 Full-screen app experience
+- 🌐 Works offline
+- ⚡ Faster startup
+- 🏠 Home Screen icon
+- 🔒 Your data stays on your device
 
 ---
 
 ## 🤝 Contributing
 
 Suggestions, bug reports, and feature ideas are always welcome.
-
-Feel free to open an issue or submit a pull request.
 
 ---
 
