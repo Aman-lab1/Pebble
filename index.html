@@ -84,14 +84,24 @@
     </section>
 
     <!-- ==================== HISTORY FILTERS ==================== -->
-    <nav id="history-filters" class="filters" aria-label="History Filters">
-      <button class="filter-btn filter-btn-active" data-filter="today" aria-label="Filter: Today" aria-current="true">Today</button>
-      <button class="filter-btn" data-filter="week" aria-label="Filter: Week">Week</button>
-      <button class="filter-btn" data-filter="month" aria-label="Filter: Month">Month</button>
-      <button class="filter-btn" data-filter="year" aria-label="Filter: Year">Year</button>
-      <button class="filter-btn" data-filter="all" aria-label="Filter: All">All</button>
-      <button class="filter-btn" data-filter="custom" aria-label="Filter: Custom date range">Custom</button>
-    </nav>
+    <div id="history-filters-wrapper" class="filters-wrapper">
+      <nav id="history-filters" class="filters" aria-label="History Filters">
+        <button class="filter-btn filter-btn-active" data-filter="all" aria-label="Filter: All" aria-current="true">All</button>
+        <button class="filter-btn" data-filter="today" aria-label="Filter: Today">Today</button>
+        <button class="filter-btn" data-filter="week" aria-label="Filter: Week">Week</button>
+        <button class="filter-btn" data-filter="month" aria-label="Filter: Month">Month</button>
+        <button class="filter-btn" data-filter="year" aria-label="Filter: Year">Year</button>
+        <button class="filter-btn" data-filter="custom" aria-label="Filter: Custom date range">Custom</button>
+      </nav>
+      <button
+        id="filters-scroll-hint"
+        class="filters-scroll-hint"
+        aria-label="Scroll to see more filters"
+        tabindex="-1"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+      </button>
+    </div>
 
     <!-- ==================== FILTER SUBTITLE ==================== -->
     <p id="filter-description" class="filter-description" aria-live="polite" hidden></p>
@@ -393,7 +403,7 @@
           </button>
           <div id="about-pebble-panel" class="settings-section-panel">
             <div class="settings-section-panel-inner">
-              <p class="settings-section-description">Pebble is a minimal personal expense tracker built to make everyday money management simple, fast and distraction-free. Every feature is designed to stay out of your way so tracking expenses becomes a daily habit.</p>
+              <p class="settings-section-description">Pebble is a minimal, offline-first personal expense tracker built to make everyday money management simple, fast and distraction-free. Everything is stored securely on your own device, so your data stays private and the app continues to work even without an internet connection.</p>
             </div>
           </div>
         </section>

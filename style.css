@@ -361,6 +361,11 @@ body::-webkit-scrollbar,
   line-height: 1;
 }
 
+/* -- Filter row wrapper (positions the scroll hint chevron) -- */
+.filters-wrapper {
+  position: relative;
+}
+
 /* -- Filter buttons (segmented chips) -- */
 .filters {
   display: flex;
@@ -372,6 +377,33 @@ body::-webkit-scrollbar,
 
 .filters::-webkit-scrollbar {
   display: none;
+}
+
+/* -- Scroll hint chevron: hints that "Custom" is off-screen -- */
+.filters-scroll-hint {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: var(--space-1);
+  width: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 2px;
+  border: none;
+  background: linear-gradient(to right, transparent, var(--color-bg) 65%);
+  color: var(--color-text-secondary);
+  opacity: 1;
+  transition: opacity var(--transition-fast);
+  pointer-events: none;
+}
+
+.filters-scroll-hint.is-visible {
+  pointer-events: auto;
+}
+
+.filters-scroll-hint.is-hidden {
+  opacity: 0;
 }
 
 .filter-btn {

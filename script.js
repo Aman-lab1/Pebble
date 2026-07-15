@@ -202,6 +202,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // markup; captured once since the set never changes at runtime.
   const filterButtons = document.querySelectorAll('#history-filters .filter-btn');
   const filterDescriptionEl = document.getElementById('filter-description');
+  const historyFiltersNav = document.getElementById('history-filters');
+  const filtersScrollHint = document.getElementById('filters-scroll-hint');
 
   // Custom date range sheet (PHASE 7.5 — integrating with existing
   // bottom sheet markup, same pattern as the budget sheet above)
@@ -251,9 +253,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // The active time filter (PHASE 7). Never touches `expenses`
   // itself — it only decides what applyCurrentFilter() returns.
   // Intentionally in-memory only; not persisted (see PHASE 6 note
-  // in the LOCAL PERSISTENCE section). Defaults to 'today' (PHASE
-  // 7.6) so Pebble always opens showing today's spending.
-  let currentFilter = 'today';
+  // in the LOCAL PERSISTENCE section). Defaults to 'all' (v1.0.1)
+  // so Pebble always opens showing full history — a fresh "Today"
+  // view tends to look empty on a new day, whereas "All" shows
+  // history, categories, and charts right away. This has no effect
+  // on the budget numbers above, which are always month-scoped
+  // regardless of `currentFilter` (see calculateDashboardData()).
+  let currentFilter = 'all';
 
   // The selected Custom range (PHASE 7.5), only meaningful when
   // currentFilter === 'custom'. Holds real Date objects (local
@@ -746,11 +752,36 @@ document.addEventListener('DOMContentLoaded', () => {
      ================================================================ */
 
   /**
+   * Returns only the expenses that fall within the current calendar
+   * month (local time), regardless of `currentFilter`. This is the
+   * one place "this month" is defined for budget purposes — the
+   * history filters (Today/Week/Year/All/Custom) have their own,
+   * separate definition in getFilterStartDate() and must never be
+   * confused with this one.
+   * @param {Array} expenseList
+   * @returns {Array}
+   */
+  function getCurrentMonthExpenses(expenseList) {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    monthStart.setHours(0, 0, 0, 0);
+
+    return expenseList.filter((expense) => new Date(expense.createdAt) >= monthStart);
+  }
+
+  /**
    * Derives the full set of dashboard data from a list of expenses
    * and a budget. Accepts `expenses` as a parameter (rather than
    * closing over the outer array directly) so that a *filtered*
    * array can be passed in later without changing this function.
    *
+   * IMPORTANT: `expenseList` is filtered down to the current
+   * calendar month right here, before anything else is computed.
+   * History filters (Today/Week/Year/All/Custom) are purely visual
+   * — they decide what the expense list below shows — and must
+   * never change what the budget thinks has been spent. Callers
+   * always pass the full `expenses` array in; this is the one
+   * place "this month" is defined.
    * @param {Array<{id:string, amount:number, category:string}>} expenseList
    * @param {number} budgetAmount
    * @returns {{
@@ -762,8 +793,10 @@ document.addEventListener('DOMContentLoaded', () => {
    * }}
    */
   function calculateDashboardData(expenseList, budgetAmount) {
+    const monthExpenses = getCurrentMonthExpenses(expenseList);
+
     // ---- Total spent: always summed fresh, never incremented. ----
-    const totalSpent = expenseList.reduce((sum, expense) => sum + expense.amount, 0);
+    const totalSpent = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
 
     // ---- Remaining budget: always (budget - totalSpent). ----
     const remainingBudget = budgetAmount - totalSpent;
@@ -775,7 +808,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ---- Category totals: single pass over the expense list. ----
     const categoryTotals = new Map();
-    expenseList.forEach((expense) => {
+    monthExpenses.forEach((expense) => {
       const current = categoryTotals.get(expense.category) || 0;
       categoryTotals.set(expense.category, current + expense.amount);
     });
@@ -972,13 +1005,15 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /**
-   * Single entry point for refreshing dashboard numbers. Recomputes
-   * from whichever expense list it's given (full or filtered) plus
-   * `budget`, and re-renders every dashboard piece. Defaults to the
-   * full `expenses` array so existing callers keep working
-   * unchanged. Any future feature that changes data (delete, edit,
-   * filter, budget update) should only touch state and then call
-   * this — nothing else.
+   * Single entry point for refreshing dashboard numbers. Always
+   * pass the full `expenses` array — calculateDashboardData() is
+   * responsible for narrowing that down to the current calendar
+   * month, so the budget numbers stay correct no matter what the
+   * history filter is currently set to. Defaults to the full
+   * `expenses` array so existing callers keep working unchanged.
+   * Any future feature that changes data (delete, edit, filter,
+   * budget update) should only touch state and then call this —
+   * nothing else.
    * @param {Array} [expenseList=expenses]
    */
   function updateDashboard(expenseList = expenses) {
@@ -1038,7 +1073,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     budget = newBudget;
     saveState();
-    updateDashboard(applyCurrentFilter(expenses));
+    updateDashboard(expenses);
     closeBudgetSheet();
   });
 
@@ -1315,15 +1350,16 @@ document.addEventListener('DOMContentLoaded', () => {
              ▼
        filteredExpenses
              │
-             ├── renderExpenses(filteredExpenses)
-             └── updateDashboard(filteredExpenses)
+             └── renderExpenses(filteredExpenses)
 
-     renderExpenses() and updateDashboard() (PHASE 3/4) don't know
-     or care whether the list they're given is filtered — that
-     decision lives entirely here, in one place. The Custom filter
-     (PHASE 7.5) is not a special case anywhere else in the app: it
-     just makes applyCurrentFilter() check an upper bound as well as
-     a lower one.
+     updateDashboard() (PHASE 3/4) always receives the full
+     `expenses` array, never filteredExpenses — the history filter
+     is purely visual and only ever decides what the expense list
+     below shows (PHASE 12 makes calculateDashboardData() the one
+     place "this month" is defined for budget purposes). The Custom
+     filter (PHASE 7.5) is not a special case anywhere else in the
+     app: it just makes applyCurrentFilter() check an upper bound as
+     well as a lower one.
      ================================================================ */
 
   /**
@@ -1510,7 +1546,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function refreshUI() {
     const filteredExpenses = applyCurrentFilter(expenses);
     renderExpenses(filteredExpenses);
-    updateDashboard(filteredExpenses);
+    updateDashboard(expenses);
     renderFilterDescription(generateFilterDescription(filteredExpenses));
     updateExportButtonState();
   }
@@ -1679,6 +1715,40 @@ document.addEventListener('DOMContentLoaded', () => {
       setFilter(btn.dataset.filter);
     });
   });
+
+  /**
+   * Keeps the scroll-hint chevron in sync with the filter row's
+   * scroll position. Purely cosmetic — never touches `currentFilter`
+   * or any expense/budget state. Hides once the row is scrolled
+   * (almost) all the way to the end, since at that point Custom is
+   * already visible and the hint has nothing left to hint at.
+   */
+  function updateFiltersScrollHint() {
+    if (!historyFiltersNav || !filtersScrollHint) return;
+
+    const { scrollLeft, scrollWidth, clientWidth } = historyFiltersNav;
+    const remainingScroll = scrollWidth - clientWidth - scrollLeft;
+    const canScrollMore = remainingScroll > 8; // small buffer for rounding
+
+    filtersScrollHint.classList.toggle('is-visible', canScrollMore);
+    filtersScrollHint.classList.toggle('is-hidden', !canScrollMore);
+  }
+
+  if (historyFiltersNav && filtersScrollHint) {
+    historyFiltersNav.addEventListener('scroll', updateFiltersScrollHint, { passive: true });
+    window.addEventListener('resize', updateFiltersScrollHint);
+
+    filtersScrollHint.addEventListener('click', () => {
+      historyFiltersNav.scrollTo({
+        left: historyFiltersNav.scrollWidth,
+        behavior: 'smooth'
+      });
+    });
+
+    // Run once after layout settles so the hint's initial visibility
+    // reflects whether the row actually overflows.
+    requestAnimationFrame(updateFiltersScrollHint);
+  }
 
 
   /* ================================================================
