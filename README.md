@@ -9,7 +9,7 @@ https://aman-lab1.github.io/Pebble/
 
 > For the best experience, install Pebble as a Progressive Web App (installation instructions are provided below).
 
-Pebble focuses on speed, simplicity, and privacy. No accounts, no ads, no unnecessary features—just a beautiful experience for tracking daily expenses.
+Pebble focuses on speed, simplicity, and privacy. No accounts, no ads, no unnecessary features-just a beautiful experience for tracking daily expenses.
 
 ---
 
@@ -103,7 +103,7 @@ Every interaction is designed to be fast, clean, distraction-free, and usable en
 
 ## 📲 Install Pebble
 
-Pebble is a **Progressive Web App (PWA)**, so you can install it directly from your browser—no App Store or Play Store required.
+Pebble is a **Progressive Web App (PWA)**, so you can install it directly from your browser-no App Store or Play Store required.
 
 ### 🍎 iPhone / iPad (Safari)
 
