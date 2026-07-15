@@ -1,6 +1,11 @@
-const CACHE_NAME = "pebble-v1";
+// =====================================================
+// Pebble Service Worker
+// Version: 1.0.2
+// =====================================================
 
-const FILES_TO_CACHE = [
+const CACHE_NAME = "pebble-v1.0.2";
+
+const STATIC_ASSETS = [
   "./",
   "./index.html",
   "./style.css",
@@ -10,18 +15,20 @@ const FILES_TO_CACHE = [
   "./icons/icon-512.png"
 ];
 
-// Install
+// ----------------------------
+// INSTALL
+// ----------------------------
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(FILES_TO_CACHE);
-    })
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
   );
 
   self.skipWaiting();
 });
 
-// Activate
+// ----------------------------
+// ACTIVATE
+// ----------------------------
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
@@ -36,11 +43,73 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// Fetch
+// ----------------------------
+// FETCH
+// ----------------------------
 self.addEventListener("fetch", (event) => {
+
+  // Ignore non-GET requests
+  if (event.request.method !== "GET") return;
+
+  const request = event.request;
+  const url = new URL(request.url);
+
+  // -----------------------------------------
+  // NETWORK FIRST for HTML
+  // -----------------------------------------
+  if (
+    request.mode === "navigate" ||
+    url.pathname.endsWith(".html") ||
+    url.pathname === "/"
+  ) {
+    event.respondWith(
+      fetch(request)
+        .then((networkResponse) => {
+
+          const responseClone = networkResponse.clone();
+
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(request, responseClone);
+          });
+
+          return networkResponse;
+
+        })
+        .catch(() => caches.match(request))
+    );
+
+    return;
+  }
+
+  // -----------------------------------------
+  // CACHE FIRST for everything else
+  // -----------------------------------------
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      return cached || fetch(event.request);
+    caches.match(request).then((cachedResponse) => {
+
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+
+      return fetch(request).then((networkResponse) => {
+
+        if (
+          networkResponse &&
+          networkResponse.status === 200 &&
+          networkResponse.type === "basic"
+        ) {
+          const responseClone = networkResponse.clone();
+
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(request, responseClone);
+          });
+        }
+
+        return networkResponse;
+
+      });
+
     })
   );
+
 });
