@@ -130,7 +130,10 @@
           </li>
         -->
       </ul>
-      <p id="expense-history-empty" class="empty-state" hidden>No expenses yet</p>
+      <p id="expense-history-empty" class="empty-state" hidden>
+        <strong>No expenses yet.</strong><br>
+        Start by tapping the <strong>＋</strong> button below.
+      </p>    
     </section>
 
     <!-- ==================== FLOATING ADD BUTTON ==================== -->
@@ -224,6 +227,20 @@
         </button>
       </div>
       <input type="hidden" id="expense-category-input" name="category" required aria-label="Selected category">
+
+      <!-- Payment Method Selector -->
+      <p class="section-title">Payment Method</p>
+      <div id="payment-method-selector" class="category-selector" role="group" aria-label="Payment Method">
+        <button type="button" class="category-btn payment-btn" data-payment-method="cash" aria-label="Cash">
+          <span class="category-icon">💵</span>
+          <span class="category-name">Cash</span>
+        </button>
+        <button type="button" class="category-btn payment-btn" data-payment-method="digital" aria-label="Digital">
+          <span class="category-icon">💳</span>
+          <span class="category-name">Digital</span>
+        </button>
+      </div>
+      <input type="hidden" id="expense-payment-method-input" name="paymentMethod" required aria-label="Selected payment method">
 
       <!-- Optional Note -->
       <div class="note-input-wrap">
@@ -415,6 +432,12 @@
         <p class="settings-footer-version">Version 1.0</p>
       </footer>
     </aside>
+  </div>
+
+  <!-- Reusable success toast (see showToast() in script.js) -->
+  <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true" hidden>
+    <span class="toast-icon" id="toast-icon"></span>
+    <p class="toast-message" id="toast-message"></p>
   </div>
 
 </body>

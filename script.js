@@ -1,6 +1,6 @@
 /* ================================================================
     PEBBLE
-    Version 0.9.0
+    Version 0.9.1
     (Displayed in-app as "Version 1.0" — see the Settings panel
     footer. The visible version is the public release number and
     is intentionally decoupled from this internal dev version.)
@@ -19,6 +19,7 @@
     ✔ Time Filters (All, Today, This Week, This Month, This Year)
     ✔ Custom Date Range Filter
     ✔ Filter UX Polish (default-to-Today, contextual subtitles)
+    ✔ Payment Method (Cash / Digital, remembered across sessions)
 
     Pending
     □ Additional filter ranges (Yesterday, Last 7 Days, Last 30
@@ -155,6 +156,23 @@
                 show/hide + delayed-hidden pattern already used for
                 the bottom sheets, just animating a horizontal slide
                 instead of a vertical one.
+     PHASE 11 — Payment Method. Adds a required `paymentMethod`
+                field ('cash' | 'digital') to every expense, chosen
+                from a two-button selector in the Add Expense form,
+                styled to match the existing category selector
+                (same .category-btn shell, a neutral selected-state
+                accent instead of a per-category color). The last
+                selected payment method is remembered in a new
+                in-memory `lastPaymentMethod` variable, persisted to
+                LocalStorage alongside `expenses`/`budget`, and used
+                to preselect the field the next time Add Expense is
+                opened. Old expenses saved before this phase have no
+                `paymentMethod` — isValidExpense() does not require
+                it, so they keep loading normally; when one of them
+                is opened for editing, the field falls back to
+                `lastPaymentMethod` (or 'digital' if nothing has ever
+                been remembered), never to a blank/invalid state. No
+                other calculation, filter, or rendering logic changes.
    ================================================================ */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -179,6 +197,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const categorySelector = document.getElementById('category-selector');
   const categoryHiddenInput = document.getElementById('expense-category-input');
   const noteInput = document.getElementById('expense-note-input');
+
+  // Payment Method selector (PHASE 11)
+  const paymentMethodSelector = document.getElementById('payment-method-selector');
+  const paymentMethodHiddenInput = document.getElementById('expense-payment-method-input');
+
+  // Success toast (PHASE 12)
+  const toastEl = document.getElementById('toast');
+  const toastIconEl = document.getElementById('toast-icon');
+  const toastMessageEl = document.getElementById('toast-message');
 
   // Expense history
   const expenseHistoryList = document.getElementById('expense-history-list');
@@ -272,6 +299,14 @@ document.addEventListener('DOMContentLoaded', () => {
     to: null
   };
 
+  // The most recently selected payment method (PHASE 11), one of
+  // 'cash' | 'digital'. Unlike `currentFilter`/`customDateRange`,
+  // this IS persisted (see saveState()/loadState() below) — the
+  // whole point of "remember last selection" is that it survives a
+  // reload. Defaults to 'digital' until the user picks anything, or
+  // if a saved value turns out to be invalid/missing.
+  let lastPaymentMethod = 'digital';
+
 
   /* ================================================================
      3. CATEGORY DATA
@@ -293,6 +328,18 @@ document.addEventListener('DOMContentLoaded', () => {
   // Quick id -> category lookup, used whenever an expense card needs
   // its name/icon resolved.
   const CATEGORY_MAP = new Map(CATEGORIES.map((category) => [category.id, category]));
+
+  /**
+   * Single source of truth for Payment Method UI (PHASE 11) and its
+   * CSV export label — mirrors the CATEGORIES/CATEGORY_MAP pattern
+   * above rather than introducing a differently-shaped lookup.
+   */
+  const PAYMENT_METHODS = [
+    { id: 'cash', name: 'Cash', icon: '💵' },
+    { id: 'digital', name: 'Digital', icon: '💳' }
+  ];
+
+  const PAYMENT_METHOD_MAP = new Map(PAYMENT_METHODS.map((method) => [method.id, method]));
 
 
   /* ================================================================
@@ -436,6 +483,59 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
   /* ================================================================
+     7B. PAYMENT METHOD SELECTOR (PHASE 11)
+     The two Payment Method buttons are static markup in index.html
+     (only two options, unlike the dynamically-generated category
+     list), so this section only wires up selection behavior — the
+     same select-one-deselect-rest pattern as selectCategory() above,
+     reusing .category-btn-selected so the CSS in style.css that
+     already exists for the shared .category-btn shell is reused
+     untouched.
+     ================================================================ */
+
+  const paymentMethodButtons = paymentMethodSelector.querySelectorAll('.payment-btn');
+
+  /**
+   * Selects a single payment method button, deselecting all others,
+   * and syncs the hidden paymentMethod input used for form
+   * submission. Mirrors selectCategory() exactly.
+   * @param {HTMLButtonElement} selectedBtn
+   */
+  function selectPaymentMethod(selectedBtn) {
+    paymentMethodButtons.forEach((btn) => {
+      btn.classList.remove('category-btn-selected');
+    });
+
+    selectedBtn.classList.add('category-btn-selected');
+    paymentMethodHiddenInput.value = selectedBtn.dataset.paymentMethod;
+  }
+
+  /**
+   * Programmatically selects a payment method by id (rather than by
+   * button reference) — used whenever the form is preloaded instead
+   * of clicked into: resetForm() (remembered selection), editing an
+   * existing expense (its saved selection), and initial page load.
+   * Falls back to 'digital' if the given id doesn't match a known
+   * payment method (e.g. a corrupted/unrecognized value), so the
+   * field is never left blank.
+   * @param {string} methodId
+   */
+  function applyPaymentMethodSelection(methodId) {
+    const resolvedId = PAYMENT_METHOD_MAP.has(methodId) ? methodId : 'digital';
+    const matchingBtn = paymentMethodSelector.querySelector(
+      `.payment-btn[data-payment-method="${resolvedId}"]`
+    );
+    if (matchingBtn) {
+      selectPaymentMethod(matchingBtn);
+    }
+  }
+
+  paymentMethodButtons.forEach((btn) => {
+    btn.addEventListener('click', () => selectPaymentMethod(btn));
+  });
+
+
+  /* ================================================================
      8. AMOUNT INPUT VALIDATION (PHASE 2)
      ================================================================ */
 
@@ -521,14 +621,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
   /* ================================================================
-     9. FORM RESET (PHASE 2)
+     9. FORM RESET (PHASE 2 + PHASE 11)
      ================================================================ */
 
   /**
    * Clears amount, category selection, and note back to defaults.
    * Also exits edit mode (if active) and restores the Add Expense
    * screen's default title/button label. Called after a successful
-   * save and when navigating back.
+   * save and when navigating back. Payment Method (PHASE 11) is
+   * reset to whatever was last selected/remembered, not cleared —
+   * "remember last selection" means a fresh Add Expense should
+   * already show it preselected, unlike amount/category/note which
+   * genuinely reset to blank/none.
    */
   function resetForm() {
     addExpenseForm.reset();
@@ -537,6 +641,8 @@ document.addEventListener('DOMContentLoaded', () => {
     categorySelector.querySelectorAll('.category-btn').forEach((btn) => {
       btn.classList.remove('category-btn-selected');
     });
+
+    applyPaymentMethodSelection(lastPaymentMethod);
 
     editingExpenseId = null;
     addExpenseTitle.textContent = 'Add Expense';
@@ -601,7 +707,7 @@ document.addEventListener('DOMContentLoaded', () => {
    * Category icon color comes from the existing per-category CSS
    * rules (.expense-item[data-category="..."] .expense-category-icon),
    * keyed off data-category — nothing is hardcoded here.
-   * @param {{id: string, amount: number, category: string, note: string, createdAt: string}} expense
+   * @param {{id: string, amount: number, category: string, note: string, createdAt: string, paymentMethod?: string}} expense
    * @returns {HTMLLIElement}
    */
   function createExpenseCard(expense) {
@@ -636,7 +742,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const timestamp = document.createElement('p');
     timestamp.className = 'expense-note';
-    timestamp.textContent = dateFormatter.format(new Date(expense.createdAt));
+    const formattedDate = dateFormatter.format(new Date(expense.createdAt));
+    const paymentMethodData = PAYMENT_METHOD_MAP.get(expense.paymentMethod);
+    timestamp.textContent = paymentMethodData
+      ? `${paymentMethodData.icon} ${paymentMethodData.name} • ${formattedDate}`
+      : formattedDate;
     details.appendChild(timestamp);
 
     // Amount
@@ -1079,7 +1189,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
   /* ================================================================
-     15. EXPENSE MANAGEMENT — EDIT & DELETE (PHASE 5)
+     15. EXPENSE MANAGEMENT — EDIT & DELETE (PHASE 5 + PHASE 11)
      Expenses are always located by expense.id — never by array
      index, amount, category, or note, since any of those can
      collide or change. Every mutation here ends the same way:
@@ -1123,10 +1233,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /**
    * Enters edit mode for an existing expense: preloads the Add
-   * Expense screen with its amount, category, and note, relabels
-   * the screen so it's clear this is an edit rather than a new
-   * entry, and remembers the id being edited so the submit handler
-   * knows to update instead of create.
+   * Expense screen with its amount, category, note, and payment
+   * method, relabels the screen so it's clear this is an edit
+   * rather than a new entry, and remembers the id being edited so
+   * the submit handler knows to update instead of create.
+   *
+   * PHASE 11: older expenses saved before Payment Method existed
+   * have no `paymentMethod` field. Rather than leaving the selector
+   * in a blank/invalid state, this falls back to whatever was most
+   * recently remembered (`lastPaymentMethod`), or 'digital' if
+   * nothing has ever been remembered either — the same fallback
+   * chain applyPaymentMethodSelection() already implements.
    * @param {string} id
    */
   function startEditExpense(id) {
@@ -1145,6 +1262,8 @@ document.addEventListener('DOMContentLoaded', () => {
       selectCategory(categoryBtn);
     }
 
+    applyPaymentMethodSelection(expense.paymentMethod || lastPaymentMethod);
+
     addExpenseTitle.textContent = 'Edit Expense';
     saveExpenseBtn.textContent = 'Save Changes';
 
@@ -1153,7 +1272,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
   /* ================================================================
-     16. FORM SUBMISSION (PHASE 2 + PHASE 3 + REFINEMENT + PHASE 4 + PHASE 5)
+     16. FORM SUBMISSION (PHASE 2 + PHASE 3 + REFINEMENT + PHASE 4 + PHASE 5 + PHASE 11)
      ================================================================ */
 
   addExpenseForm.addEventListener('submit', (event) => {
@@ -1161,6 +1280,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const amountValue = parseFloat(amountInput.value);
     const categoryValue = categoryHiddenInput.value;
+    const paymentMethodValue = paymentMethodHiddenInput.value;
 
     // ---- Validation ----
     if (isNaN(amountValue) || amountInput.value === '') {
@@ -1178,6 +1298,15 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    if (!PAYMENT_METHOD_MAP.has(paymentMethodValue)) {
+      alert('Please select a payment method.');
+      return;
+    }
+
+    // Captured before resetForm() clears editingExpenseId below, so
+    // the toast fired after navigation still knows which flow ran.
+    const wasEditing = Boolean(editingExpenseId);
+
     if (editingExpenseId) {
       // ---- Edit path: update fields in place. id and createdAt ----
       // ---- are intentionally left untouched.                   ----
@@ -1186,6 +1315,7 @@ document.addEventListener('DOMContentLoaded', () => {
         expense.amount = roundToTwoDecimals(amountValue);
         expense.category = categoryValue;
         expense.note = noteInput.value.trim();
+        expense.paymentMethod = paymentMethodValue;
       }
     } else {
       // ---- Create path ----
@@ -1194,29 +1324,42 @@ document.addEventListener('DOMContentLoaded', () => {
         amount: roundToTwoDecimals(amountValue),
         category: categoryValue,
         note: noteInput.value.trim(),
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        paymentMethod: paymentMethodValue
       };
       expenses.push(expense);
     }
+
+    // ---- Remember this payment method for next time (PHASE 11) ----
+    lastPaymentMethod = paymentMethodValue;
 
     // ---- Update memory first, then persist, then re-render ----
     saveState();
     refreshUI();
     resetForm();
     showHomeScreen();
+
+    // ---- Success toast (PHASE 21) ----
+    // Fired after the Home screen is already showing, not during
+    // the screen transition, so it never appears to animate "with"
+    // the navigation itself.
+    window.setTimeout(() => {
+      showToast('success', wasEditing ? 'Expense Updated' : 'Expense Saved');
+    }, 120);
   });
 
 
   /* ================================================================
-     17. LOCAL PERSISTENCE (PHASE 6)
-     LocalStorage is storage, not state. `expenses` and `budget`
-     remain the single source of truth in memory at all times — this
-     section only ever reads them (to save) or writes into them
-     (to load). Nothing here renders anything or is read from
-     directly by any render function.
+     17. LOCAL PERSISTENCE (PHASE 6 + PHASE 11)
+     LocalStorage is storage, not state. `expenses`, `budget`, and
+     `lastPaymentMethod` remain the single source of truth in memory
+     at all times — this section only ever reads them (to save) or
+     writes into them (to load). Nothing here renders anything or is
+     read from directly by any render function.
 
      Flow:
-       Startup      -> loadState() populates expenses + budget
+       Startup      -> loadState() populates expenses + budget +
+                        lastPaymentMethod
        User change  -> mutation updates memory -> saveState() ->
                         renderExpenses() -> updateDashboard()
      ================================================================ */
@@ -1230,6 +1373,13 @@ document.addEventListener('DOMContentLoaded', () => {
    * check is rejected outright rather than repaired, since silently
    * rewriting corrupted data (e.g. forcing an unknown category to
    * "Others") would hide the corruption instead of discarding it.
+   *
+   * PHASE 11: `paymentMethod` is intentionally NOT required here.
+   * Expenses saved before this phase existed have no such field,
+   * and they must keep loading normally — isValidExpense() only
+   * checks that IF present, it's one of the known values; a missing
+   * field is fine, an invalid one is rejected. This keeps old data
+   * working exactly as the task requires.
    * @param {*} expense
    * @returns {boolean}
    */
@@ -1245,16 +1395,19 @@ document.addEventListener('DOMContentLoaded', () => {
       !Number.isNaN(createdAtTime) &&
       createdAtTime <= Date.now();
     const hasValidNote = expense.note === undefined || typeof expense.note === 'string';
+    const hasValidPaymentMethod =
+      expense.paymentMethod === undefined || PAYMENT_METHOD_MAP.has(expense.paymentMethod);
 
-    return hasValidId && hasValidAmount && hasValidCategory && hasValidCreatedAt && hasValidNote;
+    return hasValidId && hasValidAmount && hasValidCategory && hasValidCreatedAt &&
+      hasValidNote && hasValidPaymentMethod;
   }
 
   /**
    * Loads persisted state from LocalStorage into the existing
-   * `expenses` array and `budget` variable. Both are mutated in
-   * place (expenses.length reset + push) rather than reassigned,
-   * since `expenses` is declared `const` and every other part of
-   * the app already holds a reference to it.
+   * `expenses` array and `budget`/`lastPaymentMethod` variables.
+   * `expenses` is mutated in place (expenses.length reset + push)
+   * rather than reassigned, since it's declared `const` and every
+   * other part of the app already holds a reference to it.
    *
    * Never renders anything itself — callers are expected to render
    * afterward. If nothing is stored, or the stored data is
@@ -1295,6 +1448,10 @@ document.addEventListener('DOMContentLoaded', () => {
       budget = parsed.budget;
     }
 
+    if (PAYMENT_METHOD_MAP.has(parsed.lastPaymentMethod)) {
+      lastPaymentMethod = parsed.lastPaymentMethod;
+    }
+
     if (Array.isArray(parsed.expenses)) {
       expenses.length = 0;
       parsed.expenses
@@ -1304,14 +1461,15 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /**
-   * Persists the current in-memory `budget` and `expenses` to
-   * LocalStorage. Saves nothing else. Called after every successful
-   * mutation (add, edit, delete, budget change) — never on its own
-   * as a substitute for updating memory first.
+   * Persists the current in-memory `budget`, `expenses`, and
+   * `lastPaymentMethod` to LocalStorage. Saves nothing else. Called
+   * after every successful mutation (add, edit, delete, budget
+   * change) — never on its own as a substitute for updating memory
+   * first.
    */
   function saveState() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ budget, expenses }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ budget, expenses, lastPaymentMethod }));
     } catch (error) {
       console.error('Pebble: failed to save data.', error);
     }
@@ -1837,7 +1995,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
   /* ================================================================
-     20. CSV EXPORT (PHASE 10)
+     20. CSV EXPORT (PHASE 10 + PHASE 11)
      Exports the full `expenses` array (not the currently filtered
      view — Export Data is about the whole history) as a CSV file,
      entirely client-side via a Blob URL.
@@ -1861,15 +2019,24 @@ document.addEventListener('DOMContentLoaded', () => {
    * Reuses CATEGORY_MAP for the category name shown in the UI,
    * rather than exporting the raw category id, and reuses
    * formatDateForInput for a plain, spreadsheet-friendly date.
+   *
+   * PHASE 11: a new "Payment Method" column is appended, exporting
+   * "Cash"/"Digital" (via PAYMENT_METHOD_MAP, same pattern as
+   * category names) for every expense that has one. Older expenses
+   * saved before this phase have no `paymentMethod` — those export
+   * as an empty field rather than guessing, since CSV export is a
+   * record of what was actually stored, not a place to silently
+   * inject an assumed value.
    * @returns {string}
    */
   function buildExpensesCsv() {
-    const header = ['Date', 'Amount', 'Category', 'Note'];
+    const header = ['Date', 'Amount', 'Category', 'Note', 'Payment Method'];
     const rows = expenses.map((expense) => {
       const date = formatDateForInput(new Date(expense.createdAt));
       const category = CATEGORY_MAP.get(expense.category)?.name || expense.category;
       const note = expense.note || '';
-      return [date, expense.amount.toFixed(2), category, note];
+      const paymentMethod = PAYMENT_METHOD_MAP.get(expense.paymentMethod)?.name || '';
+      return [date, expense.amount.toFixed(2), category, note, paymentMethod];
     });
 
     return [header, ...rows]
@@ -1917,11 +2084,83 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
   /* ================================================================
-     21. INITIALIZATION
+     21. SUCCESS TOAST
+     A single generic, reusable component — showToast(icon, message) —
+     for any brief centered confirmation (Expense Saved, Expense
+     Updated, and future ones like Expense Deleted / CSV Exported).
+     It never decides *when* to fire; callers do that, then hand it
+     just an icon key and a message. Nothing here touches `expenses`,
+     `budget`, storage, or any other screen.
+     ================================================================ */
+
+  // Markup for each supported icon, keyed by name. Adding a future
+  // icon (e.g. a red "x" for a delete/error toast) only means adding
+  // one more entry here — showToast() itself never changes.
+  const TOAST_ICONS = {
+    success: `
+      <svg viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.5"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M5 12.5 10 17.5 19 7"/>
+      </svg>
+    `
+  };
+
+  // Tracks pending timers across calls so a toast fired while
+  // another is still visible/fading restarts cleanly instead of the
+  // two overlapping or fighting over the same element.
+  let toastShowTimeoutId = null;
+  let toastHideTimeoutId = null;
+
+  const TOAST_VISIBLE_MS = 900;
+  const TOAST_FADE_MS = 180;
+
+  /**
+   * Shows a centered, auto-dismissing toast. Generic by design: any
+   * feature that just needs a brief "X happened" confirmation calls
+   * this instead of building its own animation/timer logic.
+   * @param {keyof TOAST_ICONS} icon
+   * @param {string} message
+   */
+  function showToast(icon, message) {
+    if (!toastEl) return;
+
+    // Cancel any in-flight show/hide from a previous call so toasts
+    // fired in quick succession don't collide.
+    if (toastShowTimeoutId) window.clearTimeout(toastShowTimeoutId);
+    if (toastHideTimeoutId) window.clearTimeout(toastHideTimeoutId);
+
+    toastIconEl.innerHTML = TOAST_ICONS[icon] || TOAST_ICONS.success;
+    toastMessageEl.textContent = message;
+
+    toastEl.hidden = false;
+    toastEl.classList.remove('toast-visible', 'toast-hiding');
+
+    // Force a reflow before adding the visible state so the opacity/
+    // transform transition actually animates in, rather than jumping
+    // straight to its end state (same technique used for the
+    // Settings panel's slide-in elsewhere in this file).
+    void toastEl.offsetWidth;
+    toastEl.classList.add('toast-visible');
+
+    toastShowTimeoutId = window.setTimeout(() => {
+      toastEl.classList.remove('toast-visible');
+      toastEl.classList.add('toast-hiding');
+
+      toastHideTimeoutId = window.setTimeout(() => {
+        toastEl.hidden = true;
+        toastEl.classList.remove('toast-hiding');
+      }, TOAST_FADE_MS);
+    }, TOAST_VISIBLE_MS);
+  }
+
+
+  /* ================================================================
+     22. INITIALIZATION
      ================================================================ */
 
   loadState();
   renderCategories();
+  applyPaymentMethodSelection(lastPaymentMethod);
   updateFilterButtonStates(currentFilter);
   refreshUI();
 

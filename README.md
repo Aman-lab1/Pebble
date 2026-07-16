@@ -20,6 +20,7 @@ Pebble focuses on speed, simplicity, and privacy. No accounts, no ads, no unnece
 - 📊 Monthly spending dashboard
 - 📈 Spending analytics with charts
 - 🗂 Category-wise expense breakdown
+- 💵 Cash & Digital payment tracking
 - 🔍 Expense history filters
   - Today
   - Week
@@ -28,6 +29,7 @@ Pebble focuses on speed, simplicity, and privacy. No accounts, no ads, no unnece
   - All
   - Custom Range
 - ✏️ Edit and delete expenses
+- ✅ Native success confirmations
 - 📤 Export expense history as CSV
 - 📱 Installable Progressive Web App (PWA)
 - 🌐 Works completely offline
@@ -77,15 +79,16 @@ Every interaction is designed to be fast, clean, distraction-free, and usable en
 
 ## 🗺 Roadmap
 
-### ✅ Version 1.0
+### 🔜 Planned Features
 
-- Expense tracking
-- Budget management
-- Spending dashboard
-- Analytics charts
-- CSV export
-- Offline support
-- Installable PWA
+- Spending insights
+- Analytics page
+- Cloud backup (optional)
+- Multiple wallets
+- Recurring expenses
+- Import from CSV
+- Themes
+- Multi-currency support
 
 ### 🔜 Planned Features
 
@@ -138,6 +141,20 @@ When installed, Pebble provides:
 - ⚡ Faster startup
 - 🏠 Home Screen icon
 - 🔒 Your data stays on your device
+
+---
+
+## 📦 Current Version
+
+**Pebble v1.1**
+
+### What's new in v1.1
+
+- 💵 Cash & Digital payment tracking
+- 💾 Remembers your last selected payment method
+- ✨ Native success confirmation toast
+- 📱 Improved native app interaction (reduced accidental text selection)
+- 🎨 General UI polish and refinements
 
 ---
 

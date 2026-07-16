@@ -3,7 +3,7 @@
 // Version: 1.0.2
 // =====================================================
 
-const CACHE_NAME = "pebble-v1.0.2";
+const CACHE_NAME = "pebble-v1.1.1";
 
 const STATIC_ASSETS = [
   "./",
