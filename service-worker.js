@@ -1,13 +1,20 @@
 // =====================================================
 // Pebble Service Worker
-// Version: 1.0.2
+// Version: 1.2.1
+// (Bumped from 1.2.0 because the static asset list changed —
+// analytics.js was merged into script.js and no longer exists as a
+// separate file. Bumping CACHE_NAME, rather than leaving it as-is,
+// is what makes the activate step below actually evict the old
+// cached analytics.js from existing installs instead of leaving it
+// behind as a harmless but stale orphan entry.)
 // =====================================================
 
-const CACHE_NAME = "pebble-v1.1.1";
+const CACHE_NAME = "pebble-v1.2.9";
 
 const STATIC_ASSETS = [
   "./",
   "./index.html",
+  "./analytics.html",
   "./style.css",
   "./script.js",
   "./manifest.json",

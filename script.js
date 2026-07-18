@@ -173,9 +173,1375 @@
                 `lastPaymentMethod` (or 'digital' if nothing has ever
                 been remembered), never to a blank/invalid state. No
                 other calculation, filter, or rendering logic changes.
+     PHASE 14 — Analytics Architecture Cleanup. The former standalone
+                analytics.js is merged into this file (see section 0,
+                PAGE ROUTING), so analytics.html now loads script.js
+                like every other page. Purely structural: no behavior
+                changes on either page, and Analytics still has no
+                charts, calculations, or data reads — those remain
+                for later Analytics tasks to add here, reusing this
+                file's existing utilities instead of duplicating them
+                in a separate file.
+     PHASE 15 — Analytics Task 2: Month Navigation. Adds the ◀ July
+                2026 ▶ selector to the top of analytics.html. One new
+                piece of state, `analyticsSelectedMonth`
+                ({year, month}), is the single source of truth every
+                later Analytics task (summary, trend, categories,
+                payment split, statistics, insights) will read
+                instead of computing its own month — none of those
+                calculations are implemented yet. stepAnalyticsMonth()
+                is the only place that mutates it, rolling the year
+                over correctly in both directions (Dec -> Jan and
+                Jan -> Dec). renderAnalyticsMonthLabel() is the only
+                place that writes to the DOM. Nothing here touches
+                `expenses` or `budget`, and the selected month is
+                intentionally not persisted, matching `currentFilter`
+                on the Home screen.
    ================================================================ */
 
 document.addEventListener('DOMContentLoaded', () => {
+
+  /* ================================================================
+     0. SHARED DATA LAYER (PHASE 16 — Analytics Task 3: Summary Cards)
+     Relocated here — verbatim, nothing about their behavior changes
+     — from their previous positions further down in this file
+     (formerly sections "2. APPLICATION STATE", "3. CATEGORY DATA",
+     "4. SHARED FORMATTERS", and part of "LOCAL PERSISTENCE"). Those
+     sections used to live inside the index.html-only part of this
+     file, below the PAGE ROUTING check's early `return` for
+     analytics.html — so Analytics had no way to reach `expenses`,
+     currencyFormatter, or loadState() at all. Task 3 needs real
+     expense data, so the pieces both pages depend on now run first,
+     before either page's own logic. `expenses` remains the single
+     in-memory source of truth for the whole app; nothing here
+     filters or mutates it except loadState() itself.
+     ================================================================ */
+
+  const expenses = [];
+
+  // Temporary in-memory budget. No persistence yet — this is the
+  // one value later phases (LocalStorage, backend) will replace.
+  // Everything downstream already reads from this variable, so
+  // swapping its source later requires no changes elsewhere.
+  let budget = 10000;
+
+  // The most recently selected payment method (PHASE 11), one of
+  // 'cash' | 'digital'. Persisted (see saveState()/loadState()
+  // below) — the whole point of "remember last selection" is that
+  // it survives a reload. Defaults to 'digital' until the user picks
+  // anything, or if a saved value turns out to be invalid/missing.
+  let lastPaymentMethod = 'digital';
+
+  // Single source of truth for category UI. All category buttons
+  // and expense card icons are generated from this array.
+  const CATEGORIES = [
+    { id: 'food',          name: 'Food',          icon: '🍔', color: 'var(--category-food)' },
+    { id: 'transport',     name: 'Transport',     icon: '🚕', color: 'var(--category-transport)' },
+    { id: 'shopping',      name: 'Shopping',      icon: '🛍️', color: 'var(--category-shopping)' },
+    { id: 'health',        name: 'Health',        icon: '💊', color: 'var(--category-health)' },
+    { id: 'college',       name: 'College',       icon: '🎓', color: 'var(--category-college)' },
+    { id: 'hostel',        name: 'Hostel',        icon: '🏠', color: 'var(--category-hostel)' },
+    { id: 'entertainment', name: 'Entertainment', icon: '🎮', color: 'var(--category-entertainment)' },
+    { id: 'others',        name: 'Others',        icon: '📦', color: 'var(--category-others)' }
+  ];
+
+  // Quick id -> category lookup, used whenever an expense card needs
+  // its name/icon resolved.
+  const CATEGORY_MAP = new Map(CATEGORIES.map((category) => [category.id, category]));
+
+  /**
+   * Resolves a category's CSS custom property (defined in
+   * style.css) to its computed color value, so colors are never
+   * duplicated or hardcoded here — style.css stays the one source
+   * of truth for the palette. Used by the dashboard's category
+   * summary/chart and, since TASK 5, by Analytics' Category
+   * Breakdown bars too.
+   * @param {string} categoryId
+   * @returns {string} a CSS color value, e.g. "#F97316"
+   */
+  function getCategoryColor(categoryId) {
+    return getComputedStyle(document.documentElement)
+      .getPropertyValue(`--category-${categoryId}`)
+      .trim();
+  }
+
+  /**
+   * Single source of truth for Payment Method UI (PHASE 11) and its
+   * CSV export label — mirrors the CATEGORIES/CATEGORY_MAP pattern
+   * above rather than introducing a differently-shaped lookup.
+   */
+  const PAYMENT_METHODS = [
+    { id: 'cash', name: 'Cash', icon: '💵' },
+    { id: 'digital', name: 'Digital', icon: '💳' }
+  ];
+
+  const PAYMENT_METHOD_MAP = new Map(PAYMENT_METHODS.map((method) => [method.id, method]));
+
+  // Currency formatter — created once and reused everywhere instead
+  // of being instantiated on every render (dashboard, expense cards,
+  // CSV export, and now the Analytics summary cards), so formatting
+  // never drifts between screens.
+  const currencyFormatter = new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 2
+  });
+
+  const STORAGE_KEY = 'pebble-data';
+
+  /**
+   * Checks a single expense loaded from LocalStorage against
+   * Pebble's schema. Everything from LocalStorage is untrusted, so
+   * this is deliberately strict — an expense that fails any single
+   * check is rejected outright rather than repaired, since silently
+   * rewriting corrupted data (e.g. forcing an unknown category to
+   * "Others") would hide the corruption instead of discarding it.
+   *
+   * PHASE 11: `paymentMethod` is intentionally NOT required here.
+   * Expenses saved before this phase existed have no such field,
+   * and they must keep loading normally — isValidExpense() only
+   * checks that IF present, it's one of the known values; a missing
+   * field is fine, an invalid one is rejected. This keeps old data
+   * working exactly as the task requires.
+   * @param {*} expense
+   * @returns {boolean}
+   */
+  function isValidExpense(expense) {
+    if (!expense || typeof expense !== 'object') return false;
+
+    const hasValidId = typeof expense.id === 'string' && expense.id.trim() !== '';
+    const hasValidAmount = Number.isFinite(expense.amount) && expense.amount > 0;
+    const hasValidCategory = CATEGORY_MAP.has(expense.category);
+    const createdAtTime = new Date(expense.createdAt).getTime();
+    const hasValidCreatedAt =
+      expense.createdAt !== null &&
+      !Number.isNaN(createdAtTime) &&
+      createdAtTime <= Date.now();
+    const hasValidNote = expense.note === undefined || typeof expense.note === 'string';
+    const hasValidPaymentMethod =
+      expense.paymentMethod === undefined || PAYMENT_METHOD_MAP.has(expense.paymentMethod);
+
+    return hasValidId && hasValidAmount && hasValidCategory && hasValidCreatedAt &&
+      hasValidNote && hasValidPaymentMethod;
+  }
+
+  /**
+   * Loads persisted state from LocalStorage into the existing
+   * `expenses` array and `budget`/`lastPaymentMethod` variables.
+   * `expenses` is mutated in place (expenses.length reset + push)
+   * rather than reassigned, since it's declared `const` and every
+   * other part of the app already holds a reference to it.
+   *
+   * Never renders anything itself — callers are expected to render
+   * afterward. If nothing is stored, or the stored data is
+   * corrupted, the existing in-memory defaults are kept and the
+   * app continues normally; it never crashes because of
+   * LocalStorage.
+   */
+  function loadState() {
+    let raw;
+    try {
+      raw = localStorage.getItem(STORAGE_KEY);
+    } catch (error) {
+      // LocalStorage can be unavailable (e.g. private browsing in
+      // some browsers) — fall back to defaults silently.
+      console.error('Pebble: LocalStorage is unavailable.', error);
+      return;
+    }
+
+    if (!raw) return; // Nothing saved yet — keep defaults.
+
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (error) {
+      console.error('Pebble: saved data is corrupted, resetting.', error);
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (removeError) {
+        console.error('Pebble: failed to clear saved data.', removeError);
+      }
+      return;
+    }
+
+    if (!parsed || typeof parsed !== 'object') {
+      // Not the shape Pebble expects at all (e.g. a bare number or
+      // string got stored somehow) — keep in-memory defaults.
+      console.error('Pebble: saved data has an unexpected shape, keeping defaults.');
+      return;
+    }
+
+    if (Number.isFinite(parsed.budget)) {
+      budget = parsed.budget;
+    }
+
+    if (PAYMENT_METHOD_MAP.has(parsed.lastPaymentMethod)) {
+      lastPaymentMethod = parsed.lastPaymentMethod;
+    }
+
+    if (Array.isArray(parsed.expenses)) {
+      expenses.length = 0;
+      parsed.expenses
+        .filter(isValidExpense)
+        .forEach((expense) => expenses.push(expense));
+    }
+  }
+
+  // Populate `expenses`/`budget`/`lastPaymentMethod` from
+  // LocalStorage immediately, before either page's own logic below
+  // runs — index.html's own initialization (section 22) re-renders
+  // from this same state, and analytics.html (section 1 below) reads
+  // it directly for the summary cards.
+  loadState();
+
+
+  /* ================================================================
+     1. PAGE ROUTING (PHASE 14 — Analytics Architecture Cleanup)
+     script.js is now shared by index.html and analytics.html (this
+     replaces the former standalone analytics.js). Both pages load
+     this exact same file, but every section below this point
+     assumes index.html's markup — home screen, Add Expense form,
+     Settings panel, and so on. analytics.html has none of those
+     elements, so running that code there would throw on the first
+     null reference. Detecting the page via an element that only
+     exists on one of the two, and returning early, keeps this file a
+     single source of truth without needing to null-guard every
+     reference throughout the rest of the file.
+     On analytics.html, only the Back button needs wiring: "Back" is
+     a real page navigation to index.html rather than an in-page
+     screen swap, so a flag is stashed in sessionStorage first, which
+     is what tells index.html to reopen the Settings panel
+     automatically on arrival (see section 19.1 below, which is the
+     other half of this same flow and runs on index.html).
+     ================================================================ */
+
+  const analyticsScreen = document.getElementById('analytics-screen');
+
+  if (analyticsScreen) {
+    const backToSettingsBtn = document.getElementById('back-to-settings-btn');
+
+    if (backToSettingsBtn) {
+      backToSettingsBtn.addEventListener('click', () => {
+        sessionStorage.setItem('pebble-reopen-settings', '1');
+        window.location.href = 'index.html';
+      });
+    }
+
+    /* ==============================================================
+       1.1 MONTH NAVIGATION (TASK 2 — Analytics: Month Navigation)
+       Navigation only — no summary/trend/category/payment/statistics/
+       insight calculations are added here or anywhere else in this
+       task.
+
+       STATE: `analyticsSelectedMonth` is the single source of truth
+       for which month Analytics is looking at. It's a plain
+       {year, month} pair (month is 0-indexed, matching Date's own
+       convention, so it plugs straight into `new Date(year, month, 1)`
+       with no translation layer). Every later Analytics task (summary
+       cards, charts, category ranking, payment split, statistics,
+       insights) reads this same object instead of computing its own
+       "current month" — they just do `const selectedMonth =
+       analyticsSelectedMonth;` and derive their date range from it.
+       Nothing here writes to `expenses` or `budget`, and nothing here
+       is persisted — like `currentFilter` on the Home screen, the
+       selected analytics month is intentionally session-only.
+       ============================================================== */
+
+    const monthNavPrevBtn = document.getElementById('analytics-prev-month-btn');
+    const monthNavNextBtn = document.getElementById('analytics-next-month-btn');
+    const monthNavLabelEl = document.getElementById('analytics-month-label');
+
+    // Defined once and reused, same pattern as dateFormatter /
+    // filterDateLabelFormatter elsewhere in this file, rather than
+    // constructing a new Intl.DateTimeFormat on every render.
+    const analyticsMonthFormatter = new Intl.DateTimeFormat('en-US', {
+      month: 'long',
+      year: 'numeric'
+    });
+
+    const analyticsSelectedMonth = {
+      year: new Date().getFullYear(),
+      month: new Date().getMonth() // 0-indexed: 0 = January
+    };
+
+    // How long the label stays faded out before its text is swapped
+    // in — half of --transition-fast (180ms), so the fade-out and
+    // fade-in read as one smooth crossfade rather than a hard cut.
+    const MONTH_LABEL_TRANSITION_MS = 90;
+
+    /**
+     * Renders `analyticsSelectedMonth` into the label. A brief
+     * opacity transition (CSS-driven, see .analytics-month-nav-label
+     * in style.css) is layered on top purely for polish — the state
+     * change itself already happened by the time this runs.
+     */
+    function renderAnalyticsMonthLabel() {
+      if (!monthNavLabelEl) return;
+
+      const labelDate = new Date(
+        analyticsSelectedMonth.year,
+        analyticsSelectedMonth.month,
+        1
+      );
+
+      monthNavLabelEl.classList.add('analytics-month-label-transitioning');
+      window.setTimeout(() => {
+        monthNavLabelEl.textContent = analyticsMonthFormatter.format(labelDate);
+        monthNavLabelEl.classList.remove('analytics-month-label-transitioning');
+      }, MONTH_LABEL_TRANSITION_MS);
+    }
+
+    /**
+     * Whether `analyticsSelectedMonth` is the real calendar month
+     * right now. Computed fresh from `new Date()` on every call
+     * rather than cached — this is a derived check, not new state,
+     * so it stays in sync automatically if the app is left open
+     * across a month boundary.
+     * @returns {boolean}
+     */
+    function isAnalyticsSelectedMonthCurrent() {
+      const now = new Date();
+      return (
+        analyticsSelectedMonth.year === now.getFullYear() &&
+        analyticsSelectedMonth.month === now.getMonth()
+      );
+    }
+
+    /**
+     * Keeps the right chevron's disabled state in sync with
+     * `analyticsSelectedMonth`. Uses the native `disabled` attribute
+     * (same as #export-csv-btn elsewhere in this file) so the
+     * existing :disabled styling in style.css applies for free, and
+     * so a disabled button simply stops receiving click events —
+     * no separate "is this allowed" check needed at the call site.
+     */
+    function updateAnalyticsMonthNavButtons() {
+      if (!monthNavNextBtn) return;
+      monthNavNextBtn.disabled = isAnalyticsSelectedMonthCurrent();
+    }
+
+    /**
+     * Steps `analyticsSelectedMonth` by +1/-1 months, rolling the
+     * year over in either direction (December -> January bumps the
+     * year forward, January -> December bumps it back). This is the
+     * only place that mutates the state object.
+     *
+     * Forward navigation is clamped at the real current month — once
+     * there, +1 is a no-op. The right chevron is disabled at that
+     * point too (see updateAnalyticsMonthNavButtons), so this guard
+     * is a defensive second layer, not the primary mechanism.
+     * @param {1 | -1} direction
+     */
+    function stepAnalyticsMonth(direction) {
+      if (direction > 0 && isAnalyticsSelectedMonthCurrent()) return;
+
+      let { year, month } = analyticsSelectedMonth;
+      month += direction;
+
+      if (month > 11) {
+        month = 0;
+        year += 1;
+      } else if (month < 0) {
+        month = 11;
+        year -= 1;
+      }
+
+      analyticsSelectedMonth.year = year;
+      analyticsSelectedMonth.month = month;
+      renderAnalyticsMonthLabel();
+      updateAnalyticsMonthNavButtons();
+      updateAnalyticsSummary();
+      updateAnalyticsTrend();
+      updateCategoryBreakdown();
+      updatePaymentBreakdown();
+      updateAnalyticsStatistics();
+      updateSmartInsight();
+    }
+
+    if (monthNavPrevBtn) {
+      monthNavPrevBtn.addEventListener('click', () => stepAnalyticsMonth(-1));
+    }
+    if (monthNavNextBtn) {
+      monthNavNextBtn.addEventListener('click', () => stepAnalyticsMonth(1));
+    }
+
+    // Initial paint — no transition needed on first load, so the
+    // label is set directly rather than going through the fade path.
+    // The selected month always starts as the current month, so the
+    // right chevron also starts disabled.
+    if (monthNavLabelEl) {
+      const initialDate = new Date(
+        analyticsSelectedMonth.year,
+        analyticsSelectedMonth.month,
+        1
+      );
+      monthNavLabelEl.textContent = analyticsMonthFormatter.format(initialDate);
+    }
+    updateAnalyticsMonthNavButtons();
+
+    /* ==============================================================
+       1.2 SUMMARY CARDS (TASK 3 — Analytics: Summary Cards)
+       Follows the same architecture as the Home dashboard's
+       calculateDashboardData()/render*() split (see sections 12–13
+       further down, in the index.html-only part of this file):
+       Selected Month -> filter `expenses` -> ONE calculation
+       function -> ONE rendering function. `expenses` (section 0,
+       SHARED DATA LAYER) is read only, never mutated, and
+       `analyticsSelectedMonth` (1.1 above) stays the single source
+       of truth for which month is showing — no second month
+       variable is introduced here.
+       ============================================================== */
+
+    const summaryTotalSpentEl = document.getElementById('analytics-summary-total');
+    const summaryTransactionsEl = document.getElementById('analytics-summary-transactions');
+    const summaryAverageEl = document.getElementById('analytics-summary-average');
+
+    /**
+     * Returns only the expenses that fall within `selectedMonth`
+     * ({year, month}, month 0-indexed), using a half-open
+     * [monthStart, nextMonthStart) range so it works for any month —
+     * past, present, or (defensively) future — not just "since the
+     * 1st of the current month" like the Home dashboard's own
+     * getCurrentMonthExpenses() does. Does not touch `expenseList`.
+     * @param {Array} expenseList
+     * @param {{year:number, month:number}} selectedMonth
+     * @returns {Array}
+     */
+    function getAnalyticsMonthExpenses(expenseList, selectedMonth) {
+      const monthStart = new Date(selectedMonth.year, selectedMonth.month, 1);
+      const nextMonthStart = new Date(selectedMonth.year, selectedMonth.month + 1, 1);
+
+      return expenseList.filter((expense) => {
+        const createdAt = new Date(expense.createdAt);
+        return createdAt >= monthStart && createdAt < nextMonthStart;
+      });
+    }
+
+    /**
+     * The one calculation function for the Summary Cards. Reads
+     * only `expenseList` + `selectedMonth`; never touches the DOM.
+     * With zero expenses in the month, every field is naturally 0 —
+     * no special-cased branch needed for the "empty month" case.
+     * @param {Array} expenseList
+     * @param {{year:number, month:number}} selectedMonth
+     * @returns {{totalSpent: number, transactionCount: number, averageExpense: number}}
+     */
+    function calculateAnalyticsSummary(expenseList, selectedMonth) {
+      const monthExpenses = getAnalyticsMonthExpenses(expenseList, selectedMonth);
+
+      const totalSpent = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+      const transactionCount = monthExpenses.length;
+      const averageExpense = transactionCount > 0 ? totalSpent / transactionCount : 0;
+
+      return { totalSpent, transactionCount, averageExpense };
+    }
+
+    /**
+     * The one rendering function for the Summary Cards. Reads only
+     * the object calculateAnalyticsSummary() returns and reuses the
+     * existing currencyFormatter (section 0) — the same formatter
+     * the Home dashboard uses — so ₹ formatting never drifts between
+     * screens or gets duplicated here.
+     * @param {ReturnType<typeof calculateAnalyticsSummary>} summaryData
+     */
+    function renderAnalyticsSummary(summaryData) {
+      if (summaryTotalSpentEl) {
+        summaryTotalSpentEl.textContent = currencyFormatter.format(summaryData.totalSpent);
+      }
+      if (summaryTransactionsEl) {
+        summaryTransactionsEl.textContent = String(summaryData.transactionCount);
+      }
+      if (summaryAverageEl) {
+        summaryAverageEl.textContent = currencyFormatter.format(summaryData.averageExpense);
+      }
+    }
+
+    /**
+     * Recomputes and repaints the Summary Cards for whatever month
+     * `analyticsSelectedMonth` currently points to. The single place
+     * that chains calculation -> rendering; called once below for
+     * the initial paint, and again from stepAnalyticsMonth() every
+     * time the chevrons change the month.
+     */
+    function updateAnalyticsSummary() {
+      const summaryData = calculateAnalyticsSummary(expenses, analyticsSelectedMonth);
+      renderAnalyticsSummary(summaryData);
+    }
+
+    // Initial paint, same as the month label/buttons above.
+    updateAnalyticsSummary();
+
+    /* ==============================================================
+       1.3 SPENDING TREND (TASK 4 — Analytics: Daily Spending Trend)
+       Same architecture as Summary Cards (1.2 above):
+       analyticsSelectedMonth -> getAnalyticsMonthExpenses() ->
+       calculateAnalyticsTrend() -> renderAnalyticsTrend(). Reuses
+       getAnalyticsMonthExpenses() as-is rather than re-filtering by
+       month a second way, and reuses the exact same Chart.js
+       library/instance-update pattern the dashboard's pie chart uses
+       (see renderChart(), further down in the index.html-only part
+       of this file) — update the existing instance in place, never
+       destroy + recreate, which is what caused that chart's
+       stretching bug in the first place.
+       ============================================================== */
+
+    const trendChartCanvas = document.getElementById('analytics-trend-chart');
+
+    // Kept here (like `spendingChart` for the dashboard pie chart)
+    // so later renders update the existing instance instead of
+    // destroying and rebuilding a new Chart.js instance on every
+    // month change.
+    let analyticsTrendChart = null;
+
+    /**
+     * The one calculation function for the Spending Trend. Builds a
+     * complete day-by-day dataset for `selectedMonth` — one entry
+     * per calendar day, including days with zero spending, so the
+     * line stays continuous across the whole month. Never touches
+     * the DOM.
+     * @param {Array} expenseList
+     * @param {{year:number, month:number}} selectedMonth
+     * @returns {{labels: string[], values: number[]}}
+     */
+    function calculateAnalyticsTrend(expenseList, selectedMonth) {
+      const monthExpenses = getAnalyticsMonthExpenses(expenseList, selectedMonth);
+
+      // Last day of `selectedMonth`, via day 0 of the *next* month —
+      // correctly returns 28/29/30/31 with no hardcoded month
+      // lengths and no manual leap-year check.
+      const daysInMonth = new Date(selectedMonth.year, selectedMonth.month + 1, 0).getDate();
+
+      // One slot per day, defaulted to ₹0, summed in a single pass
+      // over the month's expenses — multiple expenses on the same
+      // day land in the same slot.
+      const dailyTotals = new Array(daysInMonth).fill(0);
+      monthExpenses.forEach((expense) => {
+        const dayOfMonth = new Date(expense.createdAt).getDate(); // 1-indexed
+        dailyTotals[dayOfMonth - 1] += expense.amount;
+      });
+
+      const labels = dailyTotals.map((_, index) => String(index + 1));
+
+      return { labels, values: dailyTotals };
+    }
+
+    /**
+     * The one rendering function for the Spending Trend. Reads only
+     * the object calculateAnalyticsTrend() returns. Resolves its
+     * colors from the same CSS custom properties the rest of Pebble
+     * uses (mirrors getCategoryColor() further down in this file)
+     * rather than hardcoding hex values here.
+     * @param {ReturnType<typeof calculateAnalyticsTrend>} trendData
+     */
+    function renderAnalyticsTrend(trendData) {
+      if (typeof Chart === 'undefined' || !trendChartCanvas) return;
+
+      if (analyticsTrendChart) {
+        // Update in place — same reasoning as the dashboard pie
+        // chart's renderChart(): destroy() + new Chart() forces a
+        // fresh canvas measurement that can capture a transient
+        // size while the surrounding card is still settling, which
+        // is what stretches/distorts the chart. update() reuses the
+        // instance and never re-measures.
+        analyticsTrendChart.data.labels = trendData.labels;
+        analyticsTrendChart.data.datasets[0].data = trendData.values;
+        analyticsTrendChart.update();
+        return;
+      }
+
+      const rootStyles = getComputedStyle(document.documentElement);
+      const lineColor = rootStyles.getPropertyValue('--color-text-primary').trim();
+      const gridColor = rootStyles.getPropertyValue('--color-border').trim();
+      const tickColor = rootStyles.getPropertyValue('--color-text-secondary').trim();
+
+      analyticsTrendChart = new Chart(trendChartCanvas, {
+        type: 'line',
+        data: {
+          labels: trendData.labels,
+          datasets: [{
+            data: trendData.values,
+            borderColor: lineColor,
+            backgroundColor: lineColor + '1A', // ~10% fill under the line
+            borderWidth: 2,
+            pointRadius: 0,
+            tension: 0.3,
+            fill: true
+          }]
+        },
+        options: {
+          responsive: true,
+          // Read-only sizing note: the chart lives inside a
+          // fixed-height wrapper (.analytics-chart-wrap in
+          // style.css), so it's given maintainAspectRatio:false to
+          // fill that fixed box rather than hold a 1:1 ratio the
+          // way the dashboard's pie chart does — a day-by-day line
+          // has no reason to be square, and this avoids the same
+          // stretching risk a second way.
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: { color: tickColor, maxRotation: 0, autoSkip: true, maxTicksLimit: 8 }
+            },
+            y: {
+              beginAtZero: true,
+              grid: { color: gridColor },
+              ticks: { color: tickColor }
+            }
+          }
+        }
+      });
+    }
+
+    /**
+     * Recomputes and repaints the Spending Trend chart for whatever
+     * month `analyticsSelectedMonth` currently points to. Called
+     * once below for the initial paint, and again from
+     * stepAnalyticsMonth() every time the chevrons change the month
+     * — same hook point as updateAnalyticsSummary().
+     */
+    function updateAnalyticsTrend() {
+      const trendData = calculateAnalyticsTrend(expenses, analyticsSelectedMonth);
+      renderAnalyticsTrend(trendData);
+    }
+
+    // Initial paint, same as the summary cards above.
+    updateAnalyticsTrend();
+
+    /* ==============================================================
+       1.4 CATEGORY BREAKDOWN (TASK 5 — Analytics: Category Breakdown)
+       Same architecture as Summary Cards and Spending Trend:
+       analyticsSelectedMonth -> getAnalyticsMonthExpenses() ->
+       calculateCategoryBreakdown() -> renderCategoryBreakdown().
+       Reuses getAnalyticsMonthExpenses() for the month filtering (no
+       second way of narrowing to a month), CATEGORY_MAP for icon/
+       name, currencyFormatter for amounts, and getCategoryColor()
+       for each bar's color — all from section 0, SHARED DATA LAYER.
+       Percentages here are intentionally NOT the dashboard's
+       percentOfBudget/percentOfSpent (calculateDashboardData(),
+       further down): this list has no concept of a monthly budget
+       for an arbitrary past month, so "percentage" means percentage
+       of that month's total spending, and each bar's width is
+       relative to the highest-spending category, not to the budget.
+       ============================================================== */
+
+    const categoriesListEl = document.getElementById('analytics-categories-list');
+    const categoriesEmptyEl = document.getElementById('analytics-categories-empty');
+
+    /**
+     * The one calculation function for the Category Breakdown. Reads
+     * only from getAnalyticsMonthExpenses() — never touches
+     * `expenses` directly — and returns categories sorted highest
+     * spend first, each with its share of the month's total and its
+     * bar width relative to the top category. Categories with no
+     * spending that month are left out entirely, same as the
+     * dashboard's own categoryBreakdown. Never touches the DOM.
+     * @param {Array} expenseList
+     * @param {{year:number, month:number}} selectedMonth
+     * @returns {Array<{id:string, name:string, icon:string, amount:number, percentOfTotal:number, barWidthPercent:number}>}
+     */
+    function calculateCategoryBreakdown(expenseList, selectedMonth) {
+      const monthExpenses = getAnalyticsMonthExpenses(expenseList, selectedMonth);
+      const totalSpent = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+
+      const categoryTotals = new Map();
+      monthExpenses.forEach((expense) => {
+        const current = categoryTotals.get(expense.category) || 0;
+        categoryTotals.set(expense.category, current + expense.amount);
+      });
+
+      const breakdown = CATEGORIES
+        .map((category) => ({
+          id: category.id,
+          name: category.name,
+          icon: category.icon,
+          amount: categoryTotals.get(category.id) || 0
+        }))
+        .filter((category) => category.amount > 0)
+        .sort((a, b) => b.amount - a.amount);
+
+      // Sorted descending above, so the first entry (if any) is
+      // always the highest-spending category — every bar's width is
+      // computed relative to that one amount, so the top category's
+      // bar is always the longest, at exactly 100%.
+      const maxAmount = breakdown.length > 0 ? breakdown[0].amount : 0;
+
+      return breakdown.map((category) => ({
+        ...category,
+        percentOfTotal: totalSpent > 0 ? (category.amount / totalSpent) * 100 : 0,
+        barWidthPercent: maxAmount > 0 ? (category.amount / maxAmount) * 100 : 0
+      }));
+    }
+
+    /**
+     * The one rendering function for the Category Breakdown. Reads
+     * only the array calculateCategoryBreakdown() returns. Shows
+     * Pebble's existing empty-state markup/pattern (same hidden-
+     * attribute toggle as #expense-history-empty) when the month has
+     * no spending at all, rather than leaving the card blank.
+     * @param {ReturnType<typeof calculateCategoryBreakdown>} categoryBreakdown
+     */
+    function renderCategoryBreakdown(categoryBreakdown) {
+      if (!categoriesListEl) return;
+
+      const isEmpty = categoryBreakdown.length === 0;
+      categoriesListEl.hidden = isEmpty;
+      if (categoriesEmptyEl) categoriesEmptyEl.hidden = !isEmpty;
+
+      categoriesListEl.innerHTML = '';
+      if (isEmpty) return;
+
+      categoryBreakdown.forEach((category) => {
+        const row = document.createElement('li');
+        row.className = 'analytics-category-row';
+        row.dataset.category = category.id;
+
+        const top = document.createElement('div');
+        top.className = 'analytics-category-top';
+
+        const nameWrap = document.createElement('span');
+        nameWrap.className = 'analytics-category-name';
+
+        const icon = document.createElement('span');
+        icon.className = 'analytics-category-icon';
+        icon.textContent = category.icon;
+
+        const name = document.createElement('span');
+        name.textContent = category.name;
+
+        nameWrap.append(icon, name);
+
+        const figures = document.createElement('span');
+        figures.className = 'analytics-category-figures';
+
+        const amount = document.createElement('span');
+        amount.className = 'analytics-category-amount';
+        amount.textContent = currencyFormatter.format(category.amount);
+
+        const percent = document.createElement('span');
+        percent.className = 'analytics-category-percent';
+        percent.textContent = `${Math.round(category.percentOfTotal)}%`;
+
+        figures.append(amount, percent);
+        top.append(nameWrap, figures);
+
+        const bar = document.createElement('div');
+        bar.className = 'analytics-category-bar';
+
+        const barFill = document.createElement('div');
+        barFill.className = 'analytics-category-bar-fill';
+        barFill.style.width = `${category.barWidthPercent}%`;
+        barFill.style.backgroundColor = getCategoryColor(category.id);
+
+        bar.appendChild(barFill);
+        row.append(top, bar);
+        categoriesListEl.appendChild(row);
+      });
+    }
+
+    /**
+     * Recomputes and repaints the Category Breakdown for whatever
+     * month `analyticsSelectedMonth` currently points to. Called
+     * once below for the initial paint, and again from
+     * stepAnalyticsMonth() every time the chevrons change the month
+     * — same hook point as updateAnalyticsSummary()/updateAnalyticsTrend().
+     */
+    function updateCategoryBreakdown() {
+      const categoryBreakdown = calculateCategoryBreakdown(expenses, analyticsSelectedMonth);
+      renderCategoryBreakdown(categoryBreakdown);
+    }
+
+    // Initial paint, same as the summary cards and trend chart above.
+    updateCategoryBreakdown();
+
+    /* ==============================================================
+       1.5 PAYMENT METHOD BREAKDOWN (TASK 6 — Analytics: Payment
+       Methods)
+       Same architecture as every other analytics section:
+       analyticsSelectedMonth -> getAnalyticsMonthExpenses() ->
+       calculatePaymentBreakdown() -> renderPaymentBreakdown().
+       Reuses getAnalyticsMonthExpenses() for the month filtering (no
+       second way of narrowing to a month), PAYMENT_METHOD_MAP as the
+       set of valid ids, and currencyFormatter for amounts — all from
+       section 0, SHARED DATA LAYER. Percentages are of that month's
+       total spending (calculateAnalyticsSummary's totalSpent, computed
+       fresh here from the same monthExpenses rather than imported, so
+       this stays a pure function of its own inputs), same convention
+       as Category Breakdown's percentOfTotal.
+       ============================================================== */
+
+    const paymentBarEl = document.getElementById('analytics-payment-bar');
+    const paymentBarDigitalEl = document.getElementById('analytics-payment-bar-digital');
+    const paymentBarCashEl = document.getElementById('analytics-payment-bar-cash');
+    const paymentFiguresEl = document.getElementById('analytics-payment-figures');
+    const paymentDigitalAmountEl = document.getElementById('analytics-payment-digital-amount');
+    const paymentDigitalPercentEl = document.getElementById('analytics-payment-digital-percent');
+    const paymentCashAmountEl = document.getElementById('analytics-payment-cash-amount');
+    const paymentCashPercentEl = document.getElementById('analytics-payment-cash-percent');
+    const paymentEmptyEl = document.getElementById('analytics-payment-empty');
+
+    /**
+     * The one calculation function for the Payment Method Breakdown.
+     * Reads only from getAnalyticsMonthExpenses() — never touches
+     * `expenses` directly. Expenses saved before payment method
+     * tracking existed have no `paymentMethod` at all; same as
+     * buildExpensesCsv() elsewhere in this file, those are left out
+     * of the digital/cash split rather than guessed into either side.
+     * If the month has no spending, every value safely falls back to
+     * 0 via the totalSpent > 0 guards below — no special-cased branch
+     * needed.
+     * @param {Array} expenseList
+     * @param {{year:number, month:number}} selectedMonth
+     * @returns {{hasExpenses:boolean, digitalTotal:number, cashTotal:number, digitalPercent:number, cashPercent:number}}
+     */
+    function calculatePaymentBreakdown(expenseList, selectedMonth) {
+      const monthExpenses = getAnalyticsMonthExpenses(expenseList, selectedMonth);
+      const totalSpent = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+
+      let digitalTotal = 0;
+      let cashTotal = 0;
+      monthExpenses.forEach((expense) => {
+        if (expense.paymentMethod === 'digital') {
+          digitalTotal += expense.amount;
+        } else if (expense.paymentMethod === 'cash') {
+          cashTotal += expense.amount;
+        }
+      });
+
+      return {
+        hasExpenses: monthExpenses.length > 0,
+        digitalTotal,
+        cashTotal,
+        digitalPercent: totalSpent > 0 ? (digitalTotal / totalSpent) * 100 : 0,
+        cashPercent: totalSpent > 0 ? (cashTotal / totalSpent) * 100 : 0
+      };
+    }
+
+    /**
+     * The one rendering function for the Payment Method Breakdown.
+     * Reads only the object calculatePaymentBreakdown() returns.
+     * Shows the same hidden-attribute empty-state pattern as Category
+     * Breakdown when the month has no expenses at all, rather than
+     * leaving the card blank. The bar's two children are widthed
+     * directly from digitalPercent/cashPercent, which always sum to
+     * at most 100% of the same total, so they always meet cleanly
+     * with no gap and no overlap.
+     * @param {ReturnType<typeof calculatePaymentBreakdown>} paymentData
+     */
+    function renderPaymentBreakdown(paymentData) {
+      if (!paymentBarDigitalEl || !paymentBarCashEl) return;
+
+      const isEmpty = !paymentData.hasExpenses;
+      if (paymentBarEl) paymentBarEl.hidden = isEmpty;
+      if (paymentFiguresEl) paymentFiguresEl.hidden = isEmpty;
+      if (paymentEmptyEl) paymentEmptyEl.hidden = !isEmpty;
+      if (isEmpty) return;
+
+      paymentBarDigitalEl.style.width = `${paymentData.digitalPercent}%`;
+      paymentBarCashEl.style.width = `${paymentData.cashPercent}%`;
+
+      if (paymentDigitalAmountEl) {
+        paymentDigitalAmountEl.textContent = currencyFormatter.format(paymentData.digitalTotal);
+      }
+      if (paymentDigitalPercentEl) {
+        paymentDigitalPercentEl.textContent = `${Math.round(paymentData.digitalPercent)}%`;
+      }
+      if (paymentCashAmountEl) {
+        paymentCashAmountEl.textContent = currencyFormatter.format(paymentData.cashTotal);
+      }
+      if (paymentCashPercentEl) {
+        paymentCashPercentEl.textContent = `${Math.round(paymentData.cashPercent)}%`;
+      }
+    }
+
+    /**
+     * Recomputes and repaints the Payment Method Breakdown for
+     * whatever month `analyticsSelectedMonth` currently points to.
+     * Called once below for the initial paint, and again from
+     * stepAnalyticsMonth() every time the chevrons change the month —
+     * same hook point as updateCategoryBreakdown().
+     */
+    function updatePaymentBreakdown() {
+      const paymentData = calculatePaymentBreakdown(expenses, analyticsSelectedMonth);
+      renderPaymentBreakdown(paymentData);
+    }
+
+    // Initial paint, same as every other analytics section above.
+    updatePaymentBreakdown();
+
+    /* ==============================================================
+       1.6 MONTHLY STATISTICS (TASK 7 — Analytics: Monthly Statistics)
+       Same architecture as every other analytics section:
+       analyticsSelectedMonth -> getAnalyticsMonthExpenses() ->
+       calculateAnalyticsStatistics() -> renderAnalyticsStatistics().
+       Reuses getAnalyticsMonthExpenses() for the month filtering (no
+       second way of narrowing to a month), CATEGORY_MAP for the
+       Highest Expense icon/name, and currencyFormatter for amounts —
+       all from section 0, SHARED DATA LAYER. Per-day totals and
+       per-day counts are both derived from a single pass over
+       monthExpenses (one Map keyed by day-of-month), so Highest
+       Spending Day and Most Active Day never traverse the month's
+       expenses separately.
+       ============================================================== */
+
+    const statisticsGridEl = document.getElementById('analytics-statistics-grid');
+    const statisticsEmptyEl = document.getElementById('analytics-statistics-empty');
+    const statHighestExpenseEl = document.getElementById('analytics-stat-highest-expense');
+    const statHighestDayEl = document.getElementById('analytics-stat-highest-day');
+    const statActiveDayEl = document.getElementById('analytics-stat-active-day');
+    const statCategoriesUsedEl = document.getElementById('analytics-stat-categories-used');
+
+    // Day-level label for the two "day" stats, e.g. "14 Jul" — no
+    // year, since analyticsSelectedMonth's year is already shown in
+    // the month nav label (1.1) above these stats; every day here is
+    // already known to fall in that same month/year.
+    const analyticsStatDateFormatter = new Intl.DateTimeFormat('en-GB', {
+      day: 'numeric',
+      month: 'short'
+    });
+
+    /**
+     * The one calculation function for Monthly Statistics. Reads
+     * only from getAnalyticsMonthExpenses() — never touches
+     * `expenses` directly. Returns hasExpenses: false (and no
+     * computed values) for an empty month rather than forcing zeroed
+     * placeholders through the "highest"/"most active" logic, since
+     * there's no meaningful "highest" of an empty set. Ties are
+     * broken by earliest date/createdAt throughout, per spec.
+     * @param {Array} expenseList
+     * @param {{year:number, month:number}} selectedMonth
+     * @returns {{hasExpenses:boolean, highestExpense:Object|null, highestSpendingDay:{date:Date,total:number}|null, mostActiveDay:{date:Date,count:number}|null, categoriesUsedCount:number}}
+     */
+    function calculateAnalyticsStatistics(expenseList, selectedMonth) {
+      const monthExpenses = getAnalyticsMonthExpenses(expenseList, selectedMonth);
+
+      if (monthExpenses.length === 0) {
+        return {
+          hasExpenses: false,
+          highestExpense: null,
+          highestSpendingDay: null,
+          mostActiveDay: null,
+          categoriesUsedCount: 0
+        };
+      }
+
+      // Highest Expense: largest amount; a tie is broken by whichever
+      // expense was created earliest.
+      let highestExpense = monthExpenses[0];
+      monthExpenses.forEach((expense) => {
+        const isHigherAmount = expense.amount > highestExpense.amount;
+        const isTiedButEarlier =
+          expense.amount === highestExpense.amount &&
+          new Date(expense.createdAt) < new Date(highestExpense.createdAt);
+        if (isHigherAmount || isTiedButEarlier) {
+          highestExpense = expense;
+        }
+      });
+
+      // One pass over monthExpenses builds per-day totals and counts
+      // together, keyed by day-of-month — safe because
+      // getAnalyticsMonthExpenses() has already narrowed everything
+      // to a single calendar month, so a day number alone is a
+      // unique key here.
+      const dailyTotals = new Map();
+      monthExpenses.forEach((expense) => {
+        const createdAt = new Date(expense.createdAt);
+        const dayKey = createdAt.getDate();
+        const existing = dailyTotals.get(dayKey);
+        if (existing) {
+          existing.total += expense.amount;
+          existing.count += 1;
+        } else {
+          dailyTotals.set(dayKey, { total: expense.amount, count: 1, date: createdAt });
+        }
+      });
+
+      // Highest Spending Day and Most Active Day: both scan the same
+      // per-day map once, each with its own "tie -> earliest date"
+      // rule, per spec.
+      let highestSpendingDay = null;
+      let mostActiveDay = null;
+      dailyTotals.forEach((dayData) => {
+        const isHigherTotal = !highestSpendingDay || dayData.total > highestSpendingDay.total;
+        const isTiedTotalButEarlier =
+          highestSpendingDay &&
+          dayData.total === highestSpendingDay.total &&
+          dayData.date < highestSpendingDay.date;
+        if (isHigherTotal || isTiedTotalButEarlier) {
+          highestSpendingDay = dayData;
+        }
+
+        const isHigherCount = !mostActiveDay || dayData.count > mostActiveDay.count;
+        const isTiedCountButEarlier =
+          mostActiveDay && dayData.count === mostActiveDay.count && dayData.date < mostActiveDay.date;
+        if (isHigherCount || isTiedCountButEarlier) {
+          mostActiveDay = dayData;
+        }
+      });
+
+      // Categories Used: unique category ids touched this month.
+      const categoriesUsedCount = new Set(monthExpenses.map((expense) => expense.category)).size;
+
+      return { hasExpenses: true, highestExpense, highestSpendingDay, mostActiveDay, categoriesUsedCount };
+    }
+
+    /**
+     * The one rendering function for Monthly Statistics. Reads only
+     * the object calculateAnalyticsStatistics() returns. Shows the
+     * same hidden-attribute empty-state pattern as every other
+     * analytics section when the month has no expenses at all,
+     * rather than rendering zeroed/placeholder stat values.
+     * @param {ReturnType<typeof calculateAnalyticsStatistics>} statsData
+     */
+    
+    function renderAnalyticsStatistics(statsData) {
+      if (!statisticsGridEl) return;
+
+      const isEmpty = !statsData.hasExpenses;
+      statisticsGridEl.hidden = isEmpty;
+      if (statisticsEmptyEl) statisticsEmptyEl.hidden = !isEmpty;
+      if (isEmpty) return;
+
+      if (statHighestExpenseEl) {
+        const category = CATEGORY_MAP.get(statsData.highestExpense.category);
+        const icon = category ? category.icon : '📦';
+        const name = category ? category.name : statsData.highestExpense.category;
+
+        statHighestExpenseEl.innerHTML = `
+          <div>${icon} ${name}</div>
+          <div class="analytics-stat-secondary">
+            ${currencyFormatter.format(statsData.highestExpense.amount)}
+          </div>
+        `;
+      }
+
+      if (statHighestDayEl) {
+        statHighestDayEl.innerHTML = `
+          <div>${analyticsStatDateFormatter.format(statsData.highestSpendingDay.date)}</div>
+          <div class="analytics-stat-secondary">
+            ${currencyFormatter.format(statsData.highestSpendingDay.total)}
+          </div>
+        `;
+      }
+
+      if (statActiveDayEl) {
+        const count = statsData.mostActiveDay.count;
+
+        statActiveDayEl.innerHTML = `
+          <div>${analyticsStatDateFormatter.format(statsData.mostActiveDay.date)}</div>
+          <div class="analytics-stat-secondary">
+            ${count} expense${count === 1 ? '' : 's'}
+          </div>
+        `;
+      }
+
+      if (statCategoriesUsedEl) {
+        const count = statsData.categoriesUsedCount;
+
+        statCategoriesUsedEl.innerHTML = `
+          <div>${count}</div>
+          <div class="analytics-stat-secondary">
+            categor${count === 1 ? 'y' : 'ies'}
+          </div>
+        `;
+      }
+    }
+
+    /**
+     * Recomputes and repaints Monthly Statistics for whatever month
+     * `analyticsSelectedMonth` currently points to. Called once below
+     * for the initial paint, and again from stepAnalyticsMonth()
+     * every time the chevrons change the month — same hook point as
+     * updatePaymentBreakdown().
+     */
+    function updateAnalyticsStatistics() {
+      const statsData = calculateAnalyticsStatistics(expenses, analyticsSelectedMonth);
+      renderAnalyticsStatistics(statsData);
+    }
+
+    // Initial paint, same as every other analytics section above.
+    updateAnalyticsStatistics();
+
+    /* ==============================================================
+       1.7 SMART INSIGHT (TASK 8 — Analytics: Smart Insight)
+       Same overall architecture as every other analytics section —
+       analyticsSelectedMonth -> calculateSmartInsight() ->
+       renderSmartInsight() — but calculateSmartInsight() is itself a
+       small priority-ordered engine rather than one big calculation:
+       each insight category (budget exceeded, budget saved, spending
+       comparison, largest category, payment habit, spending
+       activity) gets its own pure helper that returns either an
+       {icon, message} object or null, never touching the DOM. The
+       engine below evaluates them in priority order and the first
+       non-null result wins — never more than one insight, never a
+       forced weak one.
+
+       No new filtering or traversal is introduced here: every helper
+       is fed data from the exact same calculate*() functions the
+       sections above already use (calculateAnalyticsSummary,
+       calculateCategoryBreakdown, calculatePaymentBreakdown,
+       calculateAnalyticsStatistics), so Smart Insight can never drift
+       from what Summary/Categories/Payment/Statistics are already
+       showing for this month.
+       ============================================================== */
+
+    const insightTextEl = document.getElementById('analytics-insight-text');
+    const insightIconEl = document.getElementById('analytics-insight-icon');
+    const insightMessageEl = document.getElementById('analytics-insight-message');
+
+    /**
+     * Pure helper: the month immediately before `selectedMonth`,
+     * rolling the year back at January. Deliberately separate from
+     * stepAnalyticsMonth() (1.1 above) — that function mutates
+     * `analyticsSelectedMonth` in place and is clamped to "today" for
+     * forward navigation, neither of which applies here; this is just
+     * arithmetic on a {year, month} pair for the Spending Comparison
+     * insight below.
+     * @param {{year:number, month:number}} selectedMonth
+     * @returns {{year:number, month:number}}
+     */
+    function getPreviousAnalyticsMonth(selectedMonth) {
+      let { year, month } = selectedMonth;
+      month -= 1;
+      if (month < 0) {
+        month = 11;
+        year -= 1;
+      }
+      return { year, month };
+    }
+
+    /**
+     * Insight 1 (highest priority): the month's spending has already
+     * passed the budget. Shown regardless of whether the month is
+     * still in progress or complete, per spec. The overspent amount
+     * is always (totalSpent - budget), which is guaranteed positive
+     * by the totalSpent > budgetAmount guard, so it never needs a
+     * defensive Math.abs/clamp to avoid a negative-looking value.
+     * @param {number} totalSpent
+     * @param {number} budgetAmount
+     * @returns {{icon:string, message:string}|null}
+     */
+    function calculateBudgetExceededInsight(totalSpent, budgetAmount) {
+      if (budgetAmount <= 0 || totalSpent <= budgetAmount) return null;
+
+      const overspent = totalSpent - budgetAmount;
+      return { icon: '⚠️', message: `You exceeded your monthly budget by ${currencyFormatter.format(overspent)}.` };
+    }
+
+    /**
+     * Insight 2: the month finished (or is far enough into finishing)
+     * under budget. Restricted to a completed month or the current
+     * month from the 25th onward, so this never claims "you saved"
+     * with most of the month's spending still ahead of it.
+     * @param {number} totalSpent
+     * @param {number} budgetAmount
+     * @param {boolean} isCurrentMonth
+     * @param {number} todayDayOfMonth
+     * @returns {{icon:string, message:string}|null}
+     */
+    function calculateBudgetSavedInsight(totalSpent, budgetAmount, isCurrentMonth, todayDayOfMonth) {
+      if (budgetAmount <= 0 || totalSpent >= budgetAmount) return null;
+
+      const LATE_MONTH_DAY = 25;
+      const isCompletedMonth = !isCurrentMonth;
+      const isLateInCurrentMonth = isCurrentMonth && todayDayOfMonth >= LATE_MONTH_DAY;
+      if (!isCompletedMonth && !isLateInCurrentMonth) return null;
+
+      const saved = budgetAmount - totalSpent;
+      return { icon: '🎉', message: `You're ${currencyFormatter.format(saved)} under your monthly budget.` };
+    }
+
+    /**
+     * Insight 3: how this month's total compares to the previous
+     * month's. Skipped entirely with no previous-month spending to
+     * compare against (an empty/zero previous month isn't a
+     * meaningful baseline — spec explicitly rules out comparing
+     * against zero). "Meaningful" requires BOTH a relative and an
+     * absolute threshold, not percentage alone: a month that went
+     * from ₹40 to ₹80 is a "100% increase" that's still trivial in
+     * real money, and a month that went from ₹40,000 to ₹44,800 is
+     * only a 12% move but a real ₹4,800 swing — either threshold
+     * alone lets one of those slip through as noise or gets
+     * suppressed as too small, so both must clear together.
+     * @param {number} totalSpent
+     * @param {number} previousTotalSpent
+     * @returns {{icon:string, message:string}|null}
+     */
+    function calculateSpendingComparisonInsight(totalSpent, previousTotalSpent) {
+      if (previousTotalSpent <= 0) return null;
+
+      const percentChange = ((totalSpent - previousTotalSpent) / previousTotalSpent) * 100;
+      const absoluteChange = Math.abs(totalSpent - previousTotalSpent);
+
+      const MIN_PERCENT_CHANGE = 12; // ignore small relative swings
+      const MIN_ABSOLUTE_CHANGE = 300; // ignore swings that are technically a big % but a trivial ₹ amount
+      if (Math.abs(percentChange) < MIN_PERCENT_CHANGE || absoluteChange < MIN_ABSOLUTE_CHANGE) return null;
+
+      const roundedPercent = Math.round(Math.abs(percentChange));
+      return percentChange > 0
+        ? { icon: '📈', message: `You spent ${roundedPercent}% more than last month.` }
+        : { icon: '📉', message: `You spent ${roundedPercent}% less than last month.` };
+    }
+
+    /**
+     * Insight 4: whether one category clearly dominates the month.
+     * Reads only the array calculateCategoryBreakdown() already
+     * returns (sorted highest first) — no separate category totals
+     * computed here. "Clearly dominant" requires the top category to
+     * both hold a real majority-ish share of total spending AND lead
+     * the runner-up by a wide margin, so three categories sitting at
+     * 34%/33%/33% (technically "highest") isn't reported as
+     * dominance.
+     * @param {ReturnType<typeof calculateCategoryBreakdown>} categoryBreakdown
+     * @returns {{icon:string, message:string}|null}
+     */
+    function calculateLargestCategoryInsight(categoryBreakdown) {
+      if (categoryBreakdown.length === 0) return null;
+
+      const DOMINANCE_SHARE = 40; // top category must be ~2/5 of total spending
+      const DOMINANCE_MARGIN = 15; // and lead the runner-up by 15+ percentage points
+      const [top, second] = categoryBreakdown;
+      if (top.percentOfTotal < DOMINANCE_SHARE) return null;
+      if (second && top.percentOfTotal - second.percentOfTotal < DOMINANCE_MARGIN) return null;
+
+      return { icon: top.icon, message: `${top.name} was your biggest spending category this month.` };
+    }
+
+    /**
+     * Insight 5: whether one payment method clearly dominates the
+     * month. Reads only the object calculatePaymentBreakdown()
+     * already returns. "Clearly dominant" is set well above a bare
+     * majority (70%) so a roughly 55/45 split — real, but not a
+     * strong habit — stays quiet.
+     * @param {ReturnType<typeof calculatePaymentBreakdown>} paymentData
+     * @returns {{icon:string, message:string}|null}
+     */
+    function calculatePaymentHabitInsight(paymentData) {
+      if (!paymentData.hasExpenses) return null;
+
+      const DOMINANCE_SHARE = 70;
+      if (paymentData.digitalPercent >= DOMINANCE_SHARE) {
+        return { icon: '💳', message: 'Most of your spending was paid digitally.' };
+      }
+      if (paymentData.cashPercent >= DOMINANCE_SHARE) {
+        return { icon: '💵', message: 'Most of your spending was paid in cash.' };
+      }
+      return null;
+    }
+
+    /**
+     * Insight 6 (lowest priority, fallback before the default
+     * message): calls out the busiest spending day if it actually
+     * stands out, reusing calculateAnalyticsStatistics()'s
+     * highestSpendingDay rather than re-deriving it. Only meaningful
+     * once a single day accounts for a real chunk (1/4+) of the
+     * whole month's spending — otherwise a fairly even month would
+     * get an arbitrary-feeling callout for a day only marginally
+     * ahead of the rest.
+     * @param {ReturnType<typeof calculateAnalyticsStatistics>} statsData
+     * @param {number} totalSpent
+     * @returns {{icon:string, message:string}|null}
+     */
+    function calculateSpendingActivityInsight(statsData, totalSpent) {
+      if (!statsData.hasExpenses || totalSpent <= 0) return null;
+
+      const MIN_DAY_SHARE = 25; // the busiest single day must be 1/4+ of the month's total
+      const dayShare = (statsData.highestSpendingDay.total / totalSpent) * 100;
+      if (dayShare < MIN_DAY_SHARE) return null;
+
+      const dayLabel = analyticsStatDateFormatter.format(statsData.highestSpendingDay.date);
+      return { icon: '📅', message: `Your busiest spending day was ${dayLabel}.` };
+    }
+
+    /**
+     * The insight engine. Gathers each candidate's inputs from the
+     * existing calculate*() functions exactly once, then evaluates
+     * the six helpers above in priority order (budget exceeded ->
+     * budget saved -> spending comparison -> largest category ->
+     * payment habit -> spending activity) and returns the first
+     * non-null result. Returns null when nothing qualifies, which
+     * renderSmartInsight() below turns into the neutral default
+     * message rather than forcing a weak insight. Never touches the
+     * DOM.
+     * @param {Array} expenseList
+     * @param {{year:number, month:number}} selectedMonth
+     * @param {number} budgetAmount
+     * @returns {{icon:string, message:string}|null}
+     */
+    function calculateSmartInsight(expenseList, selectedMonth, budgetAmount) {
+      const totalSpent = calculateAnalyticsSummary(expenseList, selectedMonth).totalSpent;
+      const previousTotalSpent = calculateAnalyticsSummary(
+        expenseList,
+        getPreviousAnalyticsMonth(selectedMonth)
+      ).totalSpent;
+      const categoryBreakdown = calculateCategoryBreakdown(expenseList, selectedMonth);
+      const paymentData = calculatePaymentBreakdown(expenseList, selectedMonth);
+      const statsData = calculateAnalyticsStatistics(expenseList, selectedMonth);
+      const isCurrentMonth = isAnalyticsSelectedMonthCurrent();
+      const todayDayOfMonth = new Date().getDate();
+
+      const insightCandidates = [
+        () => calculateBudgetExceededInsight(totalSpent, budgetAmount),
+        () => calculateBudgetSavedInsight(totalSpent, budgetAmount, isCurrentMonth, todayDayOfMonth),
+        () => calculateSpendingComparisonInsight(totalSpent, previousTotalSpent),
+        () => calculateLargestCategoryInsight(categoryBreakdown),
+        () => calculatePaymentHabitInsight(paymentData),
+        () => calculateSpendingActivityInsight(statsData, totalSpent)
+      ];
+
+      for (const getInsight of insightCandidates) {
+        const insight = getInsight();
+        if (insight) return insight;
+      }
+
+      return null;
+    }
+
+    /**
+     * The one rendering function for Smart Insight. Reads only the
+     * object (or null) calculateSmartInsight() returns. With no
+     * qualifying insight, shows a single neutral default line — in
+     * the same element, muted via .analytics-insight-text-empty —
+     * rather than toggling a separate empty-state block, since "no
+     * insight yet" isn't the same thing as "no expenses this month"
+     * (an active month with plenty of expenses can still have no
+     * insight that clears every threshold above).
+     * @param {{icon:string, message:string}|null} insight
+     */
+    function renderSmartInsight(insight) {
+      if (!insightTextEl || !insightIconEl || !insightMessageEl) return;
+
+      if (insight) {
+        insightTextEl.classList.remove('analytics-insight-text-empty');
+        insightIconEl.textContent = insight.icon;
+        insightMessageEl.textContent = insight.message;
+      } else {
+        insightTextEl.classList.add('analytics-insight-text-empty');
+        insightIconEl.textContent = '';
+        insightMessageEl.textContent = 'Keep tracking your expenses to unlock monthly insights.';
+      }
+    }
+
+    /**
+     * Recomputes and repaints Smart Insight for whatever month
+     * `analyticsSelectedMonth` currently points to. Called once below
+     * for the initial paint, and again from stepAnalyticsMonth() every
+     * time the chevrons change the month — same hook point as
+     * updateAnalyticsStatistics().
+     */
+    function updateSmartInsight() {
+      const insight = calculateSmartInsight(expenses, analyticsSelectedMonth, budget);
+      renderSmartInsight(insight);
+    }
+
+    // Initial paint, same as every other analytics section above.
+    updateSmartInsight();
+
+    return;
+  }
 
   /* ================================================================
      1. DOM REFERENCES
@@ -255,22 +1621,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const aboutPebbleToggle = document.getElementById('about-pebble-toggle');
   const aboutPebblePanel = document.getElementById('about-pebble-panel');
 
+  // Analytics entry point (PHASE 13 — v1.2 Analytics Foundation).
+  // Analytics itself lives on its own page (analytics.html); this is
+  // just the settings row that navigates there.
+  const openAnalyticsBtn = document.getElementById('open-analytics-btn');
+
 
   /* ================================================================
      2. APPLICATION STATE
-     `expenses` and `budget` are the single source of truth for the
-     whole app. The DOM is a rendered projection of this state —
-     never the other way around. Nothing should ever exist only in
-     the DOM.
+     `expenses` and `budget` (declared in section 0, SHARED DATA
+     LAYER, above) are the single source of truth for the whole app.
+     The DOM is a rendered projection of this state — never the
+     other way around. Nothing should ever exist only in the DOM.
+     The rest of this app's in-memory-only state lives here.
      ================================================================ */
-
-  const expenses = [];
-
-  // Temporary in-memory budget. No persistence yet — this is the
-  // one value later phases (LocalStorage, backend) will replace.
-  // Everything downstream already reads from this variable, so
-  // swapping its source later requires no changes elsewhere.
-  let budget = 10000;
 
   // When not null, the Add Expense screen is being reused to edit
   // an existing expense (identified by id) rather than create a
@@ -299,61 +1663,11 @@ document.addEventListener('DOMContentLoaded', () => {
     to: null
   };
 
-  // The most recently selected payment method (PHASE 11), one of
-  // 'cash' | 'digital'. Unlike `currentFilter`/`customDateRange`,
-  // this IS persisted (see saveState()/loadState() below) — the
-  // whole point of "remember last selection" is that it survives a
-  // reload. Defaults to 'digital' until the user picks anything, or
-  // if a saved value turns out to be invalid/missing.
-  let lastPaymentMethod = 'digital';
-
-
-  /* ================================================================
-     3. CATEGORY DATA
-     Single source of truth for category UI. All category buttons
-     and expense card icons are generated from this array.
-     ================================================================ */
-
-  const CATEGORIES = [
-    { id: 'food',          name: 'Food',          icon: '🍔', color: 'var(--category-food)' },
-    { id: 'transport',     name: 'Transport',     icon: '🚕', color: 'var(--category-transport)' },
-    { id: 'shopping',      name: 'Shopping',      icon: '🛍️', color: 'var(--category-shopping)' },
-    { id: 'health',        name: 'Health',        icon: '💊', color: 'var(--category-health)' },
-    { id: 'college',       name: 'College',       icon: '🎓', color: 'var(--category-college)' },
-    { id: 'hostel',        name: 'Hostel',        icon: '🏠', color: 'var(--category-hostel)' },
-    { id: 'entertainment', name: 'Entertainment', icon: '🎮', color: 'var(--category-entertainment)' },
-    { id: 'others',        name: 'Others',        icon: '📦', color: 'var(--category-others)' }
-  ];
-
-  // Quick id -> category lookup, used whenever an expense card needs
-  // its name/icon resolved.
-  const CATEGORY_MAP = new Map(CATEGORIES.map((category) => [category.id, category]));
-
-  /**
-   * Single source of truth for Payment Method UI (PHASE 11) and its
-   * CSV export label — mirrors the CATEGORIES/CATEGORY_MAP pattern
-   * above rather than introducing a differently-shaped lookup.
-   */
-  const PAYMENT_METHODS = [
-    { id: 'cash', name: 'Cash', icon: '💵' },
-    { id: 'digital', name: 'Digital', icon: '💳' }
-  ];
-
-  const PAYMENT_METHOD_MAP = new Map(PAYMENT_METHODS.map((method) => [method.id, method]));
-
-
-  /* ================================================================
-     4. SHARED FORMATTERS
-     Created once and reused everywhere instead of being
-     instantiated on every render — cheaper and keeps formatting
-     consistent across the app.
-     ================================================================ */
-
-  const currencyFormatter = new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    maximumFractionDigits: 2
-  });
+  // lastPaymentMethod, CATEGORIES/CATEGORY_MAP, PAYMENT_METHODS/
+  // PAYMENT_METHOD_MAP, and currencyFormatter now live in section 0
+  // (SHARED DATA LAYER) at the top of this file, so both index.html
+  // and analytics.html can reach them. Only dateFormatter — used
+  // exclusively by index.html's expense-card rendering — stays here.
 
   const dateFormatter = new Intl.DateTimeFormat('en-IN', {
     day: 'numeric',
@@ -958,21 +2272,12 @@ document.addEventListener('DOMContentLoaded', () => {
      only from the dashboardData object it's given — never from
      `expenses` or `budget` directly. This keeps calculation and
      rendering fully separated.
-     ================================================================ */
 
-  /**
-   * Resolves a category's CSS custom property (defined in
-   * style.css) to its computed color value, so colors are never
-   * duplicated or hardcoded here — style.css stays the one source
-   * of truth for the palette.
-   * @param {string} categoryId
-   * @returns {string} a CSS color value, e.g. "#F97316"
-   */
-  function getCategoryColor(categoryId) {
-    return getComputedStyle(document.documentElement)
-      .getPropertyValue(`--category-${categoryId}`)
-      .trim();
-  }
+     getCategoryColor() now lives in section 0 (SHARED DATA LAYER),
+     alongside CATEGORY_MAP, so analytics.html's Category Breakdown
+     (TASK 5) can reuse it too instead of re-resolving category CSS
+     variables its own way.
+     ================================================================ */
 
   /**
    * Renders the Monthly Spending and Remaining Budget cards.
@@ -1364,101 +2669,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         renderExpenses() -> updateDashboard()
      ================================================================ */
 
-  const STORAGE_KEY = 'pebble-data';
-
-  /**
-   * Checks a single expense loaded from LocalStorage against
-   * Pebble's schema. Everything from LocalStorage is untrusted, so
-   * this is deliberately strict — an expense that fails any single
-   * check is rejected outright rather than repaired, since silently
-   * rewriting corrupted data (e.g. forcing an unknown category to
-   * "Others") would hide the corruption instead of discarding it.
-   *
-   * PHASE 11: `paymentMethod` is intentionally NOT required here.
-   * Expenses saved before this phase existed have no such field,
-   * and they must keep loading normally — isValidExpense() only
-   * checks that IF present, it's one of the known values; a missing
-   * field is fine, an invalid one is rejected. This keeps old data
-   * working exactly as the task requires.
-   * @param {*} expense
-   * @returns {boolean}
-   */
-  function isValidExpense(expense) {
-    if (!expense || typeof expense !== 'object') return false;
-
-    const hasValidId = typeof expense.id === 'string' && expense.id.trim() !== '';
-    const hasValidAmount = Number.isFinite(expense.amount) && expense.amount > 0;
-    const hasValidCategory = CATEGORY_MAP.has(expense.category);
-    const createdAtTime = new Date(expense.createdAt).getTime();
-    const hasValidCreatedAt =
-      expense.createdAt !== null &&
-      !Number.isNaN(createdAtTime) &&
-      createdAtTime <= Date.now();
-    const hasValidNote = expense.note === undefined || typeof expense.note === 'string';
-    const hasValidPaymentMethod =
-      expense.paymentMethod === undefined || PAYMENT_METHOD_MAP.has(expense.paymentMethod);
-
-    return hasValidId && hasValidAmount && hasValidCategory && hasValidCreatedAt &&
-      hasValidNote && hasValidPaymentMethod;
-  }
-
-  /**
-   * Loads persisted state from LocalStorage into the existing
-   * `expenses` array and `budget`/`lastPaymentMethod` variables.
-   * `expenses` is mutated in place (expenses.length reset + push)
-   * rather than reassigned, since it's declared `const` and every
-   * other part of the app already holds a reference to it.
-   *
-   * Never renders anything itself — callers are expected to render
-   * afterward. If nothing is stored, or the stored data is
-   * corrupted, the existing in-memory defaults are kept and the
-   * app continues normally; it never crashes because of
-   * LocalStorage.
-   */
-  function loadState() {
-    let raw;
-    try {
-      raw = localStorage.getItem(STORAGE_KEY);
-    } catch (error) {
-      // LocalStorage can be unavailable (e.g. private browsing in
-      // some browsers) — fall back to defaults silently.
-      console.error('Pebble: LocalStorage is unavailable.', error);
-      return;
-    }
-
-    if (!raw) return; // Nothing saved yet — keep defaults.
-
-    let parsed;
-    try {
-      parsed = JSON.parse(raw);
-    } catch (error) {
-      console.error('Pebble: saved data is corrupted, resetting.', error);
-      clearState();
-      return;
-    }
-
-    if (!parsed || typeof parsed !== 'object') {
-      // Not the shape Pebble expects at all (e.g. a bare number or
-      // string got stored somehow) — keep in-memory defaults.
-      console.error('Pebble: saved data has an unexpected shape, keeping defaults.');
-      return;
-    }
-
-    if (Number.isFinite(parsed.budget)) {
-      budget = parsed.budget;
-    }
-
-    if (PAYMENT_METHOD_MAP.has(parsed.lastPaymentMethod)) {
-      lastPaymentMethod = parsed.lastPaymentMethod;
-    }
-
-    if (Array.isArray(parsed.expenses)) {
-      expenses.length = 0;
-      parsed.expenses
-        .filter(isValidExpense)
-        .forEach((expense) => expenses.push(expense));
-    }
-  }
+  // STORAGE_KEY, isValidExpense(), and loadState() now live in
+  // section 0 (SHARED DATA LAYER) at the top of this file, so both
+  // index.html and analytics.html can reach them. saveState() and
+  // clearState() below still reference the same `expenses`/`budget`/
+  // `lastPaymentMethod`/STORAGE_KEY — nothing about them changes.
 
   /**
    * Persists the current in-memory `budget`, `expenses`, and
@@ -1993,6 +3208,34 @@ document.addEventListener('DOMContentLoaded', () => {
   setupAccordion(exportDataToggle, exportDataPanel);
   setupAccordion(aboutPebbleToggle, aboutPebblePanel);
 
+  /* ================================================================
+     19.1 ANALYTICS NAVIGATION (PHASE 13 — v1.2 Analytics Foundation)
+     Analytics is a separate page (analytics.html), not a screen
+     inside index.html. To keep the Home -> Settings -> Analytics ->
+     Back -> Settings -> Back -> Home flow feeling like continuous
+     in-app navigation (rather than dropping the user back on a
+     closed Home screen), a small flag is stashed in sessionStorage
+     right before leaving for Analytics. On return, Home checks the
+     flag and reopens the Settings panel automatically. The matching
+     half of this flow — setting the flag again on Back and
+     navigating home — lives in the page-routing branch at the very
+     top of this file (PHASE 14), since that's the only Analytics-side
+     logic this shared script.js needs to run on analytics.html.
+     ================================================================ */
+
+  const REOPEN_SETTINGS_FLAG = 'pebble-reopen-settings';
+
+  if (openAnalyticsBtn) {
+    openAnalyticsBtn.addEventListener('click', () => {
+      sessionStorage.setItem(REOPEN_SETTINGS_FLAG, '1');
+    });
+  }
+
+  if (sessionStorage.getItem(REOPEN_SETTINGS_FLAG) === '1') {
+    sessionStorage.removeItem(REOPEN_SETTINGS_FLAG);
+    openSettingsPanel();
+  }
+
 
   /* ================================================================
      20. CSV EXPORT (PHASE 10 + PHASE 11)
@@ -2158,7 +3401,8 @@ document.addEventListener('DOMContentLoaded', () => {
      22. INITIALIZATION
      ================================================================ */
 
-  loadState();
+  // loadState() already ran once in section 0 (SHARED DATA LAYER),
+  // before the PAGE ROUTING check — no need to call it again here.
   renderCategories();
   applyPaymentMethodSelection(lastPaymentMethod);
   updateFilterButtonStates(currentFilter);
@@ -2174,3 +3418,123 @@ if ("serviceWorker" in navigator) {
       .catch(console.error);
   });
 }
+
+/* ================================================================
+   THIRD-PARTY ANALYTICS (Task 9 — Google Analytics 4 + Microsoft
+   Clarity)
+
+   Deliberately isolated in its own IIFE at the bottom of the file,
+   outside the DOMContentLoaded handler above: this block never
+   reads or writes any Pebble state (`expenses`, `budget`,
+   `analyticsSelectedMonth`, etc.) and nothing in the rest of the app
+   depends on it running. Pebble is an offline-first PWA, so both
+   scripts are loaded dynamically at runtime rather than as static
+   <script src="..."> tags in <head> — a static tag would attempt a
+   network request (and log a failed-request error in DevTools) on
+   every single offline page load, which is exactly what an
+   offline-first app must not do.
+
+   >>> IDS TO INSERT BEFORE GOING LIVE <<<
+   - GA4_MEASUREMENT_ID below: replace 'YOUR_GA4_MEASUREMENT_ID' with
+     the real GA4 Measurement ID (format: G-XXXXXXXXXX) from the GA4
+     Admin > Data Streams panel.
+   - CLARITY_PROJECT_ID below: replace 'YOUR_CLARITY_PROJECT_ID' with
+     the real Project ID from the Microsoft Clarity dashboard's
+     Setup/Overview page.
+   Until real IDs are inserted, both loaders below intentionally
+   no-op — the placeholder strings are checked for and skipped, so
+   nothing is ever sent anywhere by accident.
+   ================================================================ */
+(function () {
+  const GA4_MEASUREMENT_ID = 'G-CKB5GDN5TV';
+  const CLARITY_PROJECT_ID = 'xobt4mmwbs';
+
+  // Guarantees analytics initialization runs at most once per page
+  // load, even if both the initial online check and a later 'online'
+  // event could otherwise both attempt to fire it.
+  let analyticsInitialized = false;
+
+  /**
+   * Official GA4 (gtag.js) snippet, adapted to run from a function
+   * instead of firing unconditionally from inline <script> tags.
+   * Wrapped in try/catch, with an error-swallowing onerror on the
+   * injected <script> itself, so a blocked or failed request (ad
+   * blocker, flaky connection, GitHub Pages/CDN hiccup, etc.) never
+   * throws and never surfaces as a console error from Pebble's own
+   * code — it simply means analytics silently stays off for that
+   * session, exactly like the rest of the app expects.
+   */
+  function loadGoogleAnalytics() {
+    try {
+      if (!GA4_MEASUREMENT_ID || GA4_MEASUREMENT_ID === 'YOUR_GA4_MEASUREMENT_ID') return;
+
+      window.dataLayer = window.dataLayer || [];
+      window.gtag = window.gtag || function gtag() { window.dataLayer.push(arguments); };
+      window.gtag('js', new Date());
+      window.gtag('config', GA4_MEASUREMENT_ID);
+
+      const gaScript = document.createElement('script');
+      gaScript.async = true;
+      gaScript.src = `https://www.googletagmanager.com/gtag/js?id=${GA4_MEASUREMENT_ID}`;
+      gaScript.onerror = () => {}; // fails silently, never breaks or logs from Pebble's side
+      document.head.appendChild(gaScript);
+    } catch (error) {
+      // Analytics must never be able to break the app itself.
+    }
+  }
+
+  /**
+   * Official Microsoft Clarity snippet, same shape as Microsoft's
+   * own inline snippet (an IIFE that queues calls on `window.clarity`
+   * until clarity.js finishes loading, then flushes them) — just
+   * invoked conditionally here instead of unconditionally on every
+   * page load, and with the same silent-failure handling as
+   * loadGoogleAnalytics() above.
+   */
+  function loadMicrosoftClarity() {
+    try {
+      if (!CLARITY_PROJECT_ID || CLARITY_PROJECT_ID === 'YOUR_CLARITY_PROJECT_ID') return;
+
+      (function (c, l, a, r, i, t, y) {
+        c[a] = c[a] || function () { (c[a].q = c[a].q || []).push(arguments); };
+        t = l.createElement(r);
+        t.async = 1;
+        t.src = 'https://www.clarity.ms/tag/' + i;
+        t.onerror = function () {}; // fails silently, same as loadGoogleAnalytics() above
+        y = l.getElementsByTagName(r)[0];
+        y.parentNode.insertBefore(t, y);
+      })(window, document, 'clarity', 'script', CLARITY_PROJECT_ID);
+    } catch (error) {
+      // Analytics must never be able to break the app itself.
+    }
+  }
+
+  /**
+   * The single entry point for both integrations. Runs at most once
+   * (analyticsInitialized guard) and only when the device is
+   * currently online — offline-first is Pebble's whole premise, so
+   * this is never allowed to attempt a network request while
+   * offline, and never blocks or delays anything else if it can't
+   * run.
+   */
+  function initThirdPartyAnalytics() {
+    if (analyticsInitialized || !navigator.onLine) return;
+    analyticsInitialized = true;
+    loadGoogleAnalytics();
+    loadMicrosoftClarity();
+  }
+
+  // Deferred to the window 'load' event — the same point the service
+  // worker registers above — so this never competes with or delays
+  // Pebble's own initial render/paint. If the device is already
+  // online at that point, analytics starts immediately; if it's
+  // offline, a one-time 'online' listener starts it the moment
+  // connectivity returns, silently, with no user-visible change.
+  window.addEventListener('load', () => {
+    if (navigator.onLine) {
+      initThirdPartyAnalytics();
+    } else {
+      window.addEventListener('online', initThirdPartyAnalytics, { once: true });
+    }
+  });
+})();

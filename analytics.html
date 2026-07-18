@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Analytics — Pebble</title>
+
+  <!-- PWA Meta -->
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Pebble">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+
+  <!-- Stylesheet (shared with the rest of Pebble — no separate
+       analytics stylesheet, per the design system reuse requirement) -->
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Chart.js CDN (TASK 4 — Daily Spending Trend). Same version and
+       same library index.html already loads for the dashboard's pie
+       chart — this is the one Chart.js instance on the page, not a
+       second copy of the library. -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
+
+  <!-- Page Script (shared with the rest of Pebble — see section 1,
+       PAGE ROUTING, in script.js for how it detects this page) -->
+  <script src="script.js" defer></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+</head>
+<body>
+
+  <!-- ============================================================
+       SCREEN: ANALYTICS
+       Reached only via Settings -> Analytics. Task 1 (Analytics
+       Foundation) — structure and navigation only. Every section
+       below is an empty placeholder with a permanent, stable id;
+       charts, calculations, month navigation and insights are
+       implemented in later tasks directly against these same ids.
+       ============================================================ -->
+  <main id="analytics-screen" class="screen" aria-label="Analytics">
+
+    <!-- ==================== HEADER ==================== -->
+    <header class="add-expense-header">
+      <button id="back-to-settings-btn" class="back-btn" aria-label="Back to Settings">
+        <span class="back-icon">&#8592;</span>
+      </button>
+      <h2 id="analytics-title" class="add-expense-title">Analytics</h2>
+    </header>
+
+    <!-- ==================== MONTH NAVIGATION ====================
+         TASK 2. Reuses the existing .back-btn round icon button
+         (unmodified) for both chevrons — no new button style. The
+         label sits in a flex-1 span between two equal-width (40px)
+         buttons, which is what centers it perfectly regardless of
+         how wide the month text is. -->
+    <section id="analytics-month-nav" class="card analytics-month-nav" aria-label="Month Navigation">
+      <button id="analytics-prev-month-btn" class="back-btn" aria-label="Previous month">
+        <span class="back-icon">&#8592;</span>
+      </button>
+      <h3 id="analytics-month-label" class="analytics-month-nav-label"></h3>
+      <button id="analytics-next-month-btn" class="back-btn" aria-label="Next month">
+        <span class="back-icon">&#8594;</span>
+      </button>
+    </section>
+
+    <!-- ==================== SUMMARY CARDS ====================
+         TASK 3. Total Spent, Transactions, and Average Expense for
+         analyticsSelectedMonth (see script.js, section 1.2). Values
+         are populated by script.js and re-rendered on every month
+         change — nothing here is computed in markup. -->
+    <section id="analytics-summary-card" class="card analytics-summary-cards" aria-label="Summary Cards">
+      <div class="analytics-summary-item">
+        <p class="card-label">Total Spent</p>
+        <p id="analytics-summary-total" class="analytics-summary-amount">₹0</p>
+      </div>
+      <div class="analytics-summary-item">
+        <p class="card-label">Transactions</p>
+        <p id="analytics-summary-transactions" class="analytics-summary-amount">0</p>
+      </div>
+      <div class="analytics-summary-item">
+        <p class="card-label">Average</p>
+        <p id="analytics-summary-average" class="analytics-summary-amount">₹0</p>
+      </div>
+    </section>
+
+    <!-- ==================== SPENDING TREND ====================
+         TASK 4. Daily spending line chart for analyticsSelectedMonth
+         (script.js, calculateAnalyticsTrend()/renderAnalyticsTrend()).
+         Reuses the same Chart.js already loaded above, and the same
+         fixed-height container pattern as #chart-container on the
+         dashboard, so the chart can never stretch or go elliptical. -->
+    <section id="analytics-trend-card" class="card" aria-label="Spending Trend">
+      <p class="card-label">Spending Trend</p>
+      <div class="analytics-chart-wrap">
+        <canvas id="analytics-trend-chart"></canvas>
+      </div>
+    </section>
+
+    <!-- ==================== CATEGORY BREAKDOWN ====================
+         TASK 5. Ranked list (highest spend first) for
+         analyticsSelectedMonth (script.js, calculateCategoryBreakdown()
+         / renderCategoryBreakdown()). Reuses CATEGORY_MAP for icon/
+         name and currencyFormatter for amounts — nothing here is
+         computed in markup. The empty-state follows the exact same
+         hidden-attribute pattern as #expense-history-empty. -->
+    <section id="analytics-categories-card" class="card" aria-label="Category Breakdown">
+      <p class="card-label">Category Breakdown</p>
+      <ul id="analytics-categories-list" class="analytics-category-list">
+        <!-- Category rows injected by script.js -->
+      </ul>
+      <p id="analytics-categories-empty" class="empty-state" hidden>
+        <strong>No expenses this month.</strong><br>
+        Category totals will show up here once you add one.
+      </p>
+    </section>
+
+    <!-- ==================== PAYMENT METHODS ====================
+         TASK 6. Cash vs Digital split for analyticsSelectedMonth
+         (script.js, calculatePaymentBreakdown()/renderPaymentBreakdown()).
+         One merged two-tone bar (Digital left, Cash right) rather than
+         two separate bars, with the figures below it echoing the same
+         left/right split. Empty-state follows the exact same
+         hidden-attribute pattern as #analytics-categories-empty. -->
+    <section id="analytics-payment-card" class="card" aria-label="Payment Methods">
+      <p class="card-label">Payment Methods</p>
+
+      <div id="analytics-payment-bar" class="analytics-payment-bar">
+        <div id="analytics-payment-bar-digital" class="analytics-payment-bar-fill analytics-payment-bar-digital"></div>
+        <div id="analytics-payment-bar-cash" class="analytics-payment-bar-fill analytics-payment-bar-cash"></div>
+      </div>
+
+      <div id="analytics-payment-figures" class="analytics-payment-figures">
+        <div class="analytics-payment-figure">
+          <span class="analytics-payment-figure-label">
+            <span class="analytics-payment-figure-dot analytics-payment-dot-digital"></span>
+            &#128179; Digital
+          </span>
+          <span id="analytics-payment-digital-amount" class="analytics-payment-figure-amount">&#8377;0</span>
+          <span id="analytics-payment-digital-percent" class="analytics-payment-figure-percent">0%</span>
+        </div>
+        <div class="analytics-payment-figure analytics-payment-figure-right">
+          <span class="analytics-payment-figure-label">
+            <span class="analytics-payment-figure-dot analytics-payment-dot-cash"></span>
+            &#128181; Cash
+          </span>
+          <span id="analytics-payment-cash-amount" class="analytics-payment-figure-amount">&#8377;0</span>
+          <span id="analytics-payment-cash-percent" class="analytics-payment-figure-percent">0%</span>
+        </div>
+      </div>
+
+      <p id="analytics-payment-empty" class="empty-state" hidden>
+        <strong>No expenses this month.</strong><br>
+        Payment method split will show up here once you add one.
+      </p>
+    </section>
+
+    <!-- ==================== MONTHLY STATISTICS ====================
+         TASK 7. Four at-a-glance stats for analyticsSelectedMonth
+         (script.js, calculateAnalyticsStatistics()/renderAnalyticsStatistics()).
+         Two-column grid, each cell a small muted label over a larger
+         primary value — same label/value relationship as
+         .analytics-summary-item, just 2x2 instead of a single row.
+         Empty-state follows the exact same hidden-attribute pattern
+         as #analytics-categories-empty. -->
+    <section id="analytics-statistics-card" class="card" aria-label="Monthly Statistics">
+      <p class="card-label">Monthly Statistics</p>
+
+      <div id="analytics-statistics-grid" class="analytics-statistics-grid">
+        <div class="analytics-statistic-item">
+          <p class="card-label">Highest Expense</p>
+          <p id="analytics-stat-highest-expense" class="analytics-statistic-value">—</p>
+        </div>
+        <div class="analytics-statistic-item">
+          <p class="card-label">Highest Spending Day</p>
+          <p id="analytics-stat-highest-day" class="analytics-statistic-value">—</p>
+        </div>
+        <div class="analytics-statistic-item">
+          <p class="card-label">Most Active Day</p>
+          <p id="analytics-stat-active-day" class="analytics-statistic-value">—</p>
+        </div>
+        <div class="analytics-statistic-item">
+          <p class="card-label">Categories Used</p>
+          <p id="analytics-stat-categories-used" class="analytics-statistic-value">—</p>
+        </div>
+      </div>
+
+      <p id="analytics-statistics-empty" class="empty-state" hidden>
+        <strong>No expenses this month.</strong><br>
+        Monthly statistics will show up here once you add one.
+      </p>
+    </section>
+
+    <!-- ==================== SMART INSIGHT ====================
+         TASK 8. Exactly one generated sentence for analyticsSelectedMonth
+         (script.js, calculateSmartInsight()/renderSmartInsight()), chosen
+         by a small priority-ordered insight engine — never more than one,
+         never a forced weak insight. Falls back to a neutral default
+         message in the same element when nothing qualifies, so there is
+         always exactly one line here, not a toggled empty-state block. -->
+    <section id="analytics-insights-card" class="card" aria-label="Smart Insight">
+      <p class="card-label">Smart Insight</p>
+      <p id="analytics-insight-text" class="analytics-insight-text">
+        <span id="analytics-insight-icon" class="analytics-insight-icon"></span>
+        <span id="analytics-insight-message" class="analytics-insight-message"></span>
+      </p>
+    </section>
+
+  </main>
+
+</body>
+</html>

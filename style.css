@@ -289,7 +289,6 @@ body::-webkit-scrollbar,
   height: 8px;
   border-radius: 999px;
   background-color: var(--color-surface);
-  overflow: hidden;
   margin-top: var(--space-2);
 }
 
@@ -889,9 +888,7 @@ body::-webkit-scrollbar,
 .expense-category-name {
   font-size: var(--font-size-body);
   font-weight: var(--font-weight-medium);
-  white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .expense-note {
@@ -1365,4 +1362,370 @@ input:focus-visible,
     max-width: 220px;
     padding: var(--space-4) var(--space-4);
   }
+}
+
+
+/* ================================================================
+   20. ANALYTICS (v1.2 — TASK 1: FOUNDATION)
+   Placeholder sections only. Every rule here builds on top of the
+   existing .card / .card-label tokens above rather than introducing
+   a parallel style — so when Task 2+ fills these in with real
+   charts and stats, they inherit Pebble's look for free.
+   ================================================================ */
+
+.analytics-placeholder-card {
+  min-height: 96px;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+/* -- Summary Cards (TASK 3) --
+   One .card holding three stat items in a row, rather than three
+   separate cards — keeps the three related numbers scannable at a
+   glance instead of costing three full card-widths of vertical
+   space. .analytics-summary-item reuses .card-label as-is for its
+   heading; only the value below it needs its own, smaller-than-
+   --font-size-card-amount size so three ₹ values with different
+   digit counts all still fit their column on a narrow screen. */
+.analytics-summary-cards {
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.analytics-summary-item {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.analytics-summary-amount {
+  font-size: 18px;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -0.3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* -- Spending Trend (TASK 4) --
+   Same fixed-height philosophy as #chart-container/#spending-chart
+   above: a wrapper with a set height (not an aspect ratio) so the
+   canvas has a stable box to measure into on first paint, plus
+   width:100%!important + a matching max-height on the canvas itself
+   as a second guard. Chart.js is given maintainAspectRatio:false in
+   script.js so it fills this fixed box instead of trying to hold a
+   1:1 ratio the way the dashboard's pie chart does — appropriate
+   here since a day-by-day line has no reason to be square. */
+.analytics-chart-wrap {
+  margin-top: var(--space-1);
+  min-height: 200px;
+  max-height: 200px;
+}
+
+#analytics-trend-chart {
+  width: 100% !important;
+  max-height: 200px;
+}
+
+/* -- Category Breakdown (TASK 5) --
+   Deliberately not the dashboard's .category-list/.category-summary-*
+   rows (those have no percentage or bar) — this is a ranked list, so
+   each row gets its own slim bar underneath. .analytics-category-bar
+   mirrors .progress-track's shape (pill track, rounded fill, same
+   --transition-base) at a slimmer 6px, since a per-row bar next to
+   five others should read as understated, not compete with the
+   month's headline numbers above it. */
+.analytics-category-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-1);
+}
+
+.analytics-category-list[hidden] {
+  display: none;
+}
+
+.analytics-category-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.analytics-category-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.analytics-category-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-small);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analytics-category-icon {
+  flex: 0 0 auto;
+  line-height: 1;
+}
+
+.analytics-category-figures {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex: 0 0 auto;
+}
+
+.analytics-category-amount {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-small);
+}
+
+.analytics-category-percent {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-small);
+  min-width: 38px;
+  text-align: right;
+}
+
+.analytics-category-bar {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background-color: var(--color-surface);
+  overflow: hidden;
+}
+
+.analytics-category-bar-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  transition: width var(--transition-base);
+}
+
+/* -- Payment Methods (TASK 6) --
+   ONE merged bar rather than two side-by-side bars: a flex row of
+   exactly two children whose widths always sum to 100% (see
+   calculatePaymentBreakdown() in script.js), inside a container that
+   clips to a pill shape. Because only the outer container is rounded
+   and overflow is hidden, the two fills meet along a single straight
+   seam in the middle with no gap and no double-rounded corners there
+   — the "fully rounded ends, clean meeting in the middle" look — with
+   zero extra positioning math. Colors reuse two existing category
+   variables (hostel cyan / others gray) rather than introducing new
+   ones, same restraint as every other analytics section. */
+.analytics-payment-bar {
+  display: flex;
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background-color: var(--color-surface);
+  overflow: hidden;
+  margin-top: var(--space-1);
+}
+
+.analytics-payment-bar-fill {
+  height: 100%;
+  width: 0%;
+  transition: width var(--transition-base);
+}
+
+.analytics-payment-bar-digital {
+  background-color: var(--category-hostel);
+}
+
+.analytics-payment-bar-cash {
+  background-color: var(--category-others);
+}
+
+.analytics-payment-bar[hidden],
+.analytics-payment-figures[hidden] {
+  display: none;
+}
+
+/* Figures row: Digital pinned left, Cash pinned right (same
+   space-between approach as .analytics-month-nav), so the two sides
+   read as the bar's legend directly beneath it. */
+.analytics-payment-figures {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.analytics-payment-figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.analytics-payment-figure-right {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.analytics-payment-figure-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-small);
+}
+
+.analytics-payment-figure-right .analytics-payment-figure-label {
+  flex-direction: row-reverse;
+}
+
+.analytics-payment-figure-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.analytics-payment-dot-digital {
+  background-color: var(--category-hostel);
+}
+
+.analytics-payment-dot-cash {
+  background-color: var(--category-others);
+}
+
+.analytics-payment-figure-amount {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-body);
+}
+
+.analytics-payment-figure-percent {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-small);
+}
+
+/* -- Monthly Statistics (TASK 7) --
+   A 2x2 grid rather than four separate cards, per spec — each cell
+   reuses .card-label as-is for its heading (same reuse as
+   .analytics-summary-item) plus one larger value line underneath.
+   No shadows/gradients/decorative effects: cells are plain grid
+   items, not their own bordered/backgrounded boxes. */
+.analytics-statistics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  margin-top: var(--space-1);
+}
+
+.analytics-statistics-grid[hidden] {
+  display: none;
+}
+
+.analytics-statistic-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.analytics-statistic-value {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-body);
+}
+
+.analytics-stat-primary {
+  color: var(--color-text-primary);
+}
+
+.analytics-stat-secondary {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-small);
+}
+
+/* -- Smart Insight (TASK 8) --
+   One plain text line, icon + message — no card-within-a-card, no
+   shadow/gradient, consistent with the "no decorative effects" rule
+   already followed by Statistics/Payment Methods above. Sized like
+   .analytics-statistic-value since both are a single primary line
+   under a .card-label heading. */
+.analytics-insight-text {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.4;
+}
+
+.analytics-insight-icon:empty {
+  display: none;
+}
+
+/* Default/no-insight state: same line, no icon, muted to read as a
+   quiet placeholder rather than an actual finding — same color
+   .analytics-category-name and .analytics-payment-figure-label
+   already use for secondary text. */
+.analytics-insight-text-empty {
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+
+/* -- Month Navigation (TASK 2) --
+   .card defaults to a column layout (see section 5); this overrides
+   it to a row so the two chevrons sit at the edges. The label is
+   flex: 1 and text-centered, and since both .back-btn chevrons are
+   the same fixed 40px width, that centers the label perfectly
+   regardless of how wide "September 2026" vs "May 2026" is — no
+   manual offset math needed. The chevrons themselves are the exact
+   same .back-btn already used in the header above; nothing new was
+   introduced for them. */
+.analytics-month-nav {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+}
+
+.analytics-month-nav-label {
+  flex: 1;
+  text-align: center;
+  font-size: var(--font-size-section-title);
+  font-weight: var(--font-weight-semibold);
+  transition: opacity var(--transition-fast);
+}
+
+/* Brief crossfade while the label text swaps, toggled from script.js
+   for a native, non-jarring month change instead of an instant snap. */
+.analytics-month-nav-label.analytics-month-label-transitioning {
+  opacity: 0;
+}
+
+/* Right chevron once analyticsSelectedMonth is the current calendar
+   month — identical rule shape to #export-csv-btn:disabled above,
+   reusing --transition-fast implicitly via .back-btn's own
+   transition rather than adding a new one. */
+#analytics-next-month-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#analytics-next-month-btn:disabled:hover {
+  opacity: 0.5;
 }
