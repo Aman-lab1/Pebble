@@ -108,7 +108,7 @@
                 feature: everything from LocalStorage is now treated
                 as untrusted. isValidExpense() checks id/amount/
                 category/createdAt/note against schema (reusing
-                CATEGORY_MAP, not a separate list) and loadState()
+                the category manager, not a separate list) and loadState()
                 filters every loaded expense through it — a failing
                 expense is skipped, never repaired. A malformed
                 top-level shape, or a non-finite budget, is ignored
@@ -150,7 +150,7 @@
                 CSV export (section 20) builds a Blob client-side
                 from the full `expenses` array — Date/Amount/
                 Category/Note columns, category names resolved via
-                the existing CATEGORY_MAP — with no changes to
+                the existing category manager — with no changes to
                 expenses, budget, filters, storage, validation, or
                 the chart. Panel open/close follows the same
                 show/hide + delayed-hidden pattern already used for
@@ -232,43 +232,376 @@ document.addEventListener('DOMContentLoaded', () => {
   // anything, or if a saved value turns out to be invalid/missing.
   let lastPaymentMethod = 'digital';
 
-  // Single source of truth for category UI. All category buttons
-  // and expense card icons are generated from this array.
-  const CATEGORIES = [
-    { id: 'food',          name: 'Food',          icon: '🍔', color: 'var(--category-food)' },
-    { id: 'transport',     name: 'Transport',     icon: '🚕', color: 'var(--category-transport)' },
-    { id: 'shopping',      name: 'Shopping',      icon: '🛍️', color: 'var(--category-shopping)' },
-    { id: 'health',        name: 'Health',        icon: '💊', color: 'var(--category-health)' },
-    { id: 'college',       name: 'College',       icon: '🎓', color: 'var(--category-college)' },
-    { id: 'hostel',        name: 'Hostel',        icon: '🏠', color: 'var(--category-hostel)' },
-    { id: 'entertainment', name: 'Entertainment', icon: '🎮', color: 'var(--category-entertainment)' },
-    { id: 'others',        name: 'Others',        icon: '📦', color: 'var(--category-others)' }
+  /* ================================================================
+     0.4 CATEGORY MANAGER (v1.5.0 — Category Architecture Foundation)
+     The single source of truth for categories, full stop. Every
+     screen, list, dropdown, chart, statistic, search match, and CSV
+     column that needs a category's name/emoji/color now goes through
+     the small API below (getCategories/getCategoryById/
+     getCategoryName/getCategoryEmoji/getCategoryColor/categoryExists)
+     instead of touching a category array or map directly anywhere
+     else in this file.
+
+     Each category is a plain data object: { id, name, emoji, color,
+     isDefault }. `color` is still just the CSS custom-property
+     reference (style.css remains the one source of truth for the
+     actual palette) — it exists on the object now so a future
+     Manage Categories UI can read/display it without another schema
+     change. `isDefault` distinguishes Pebble's built-in categories
+     from ones a later phase lets a user create; nothing reads it yet.
+
+     Categories are persisted separately from expenses, under their
+     own LocalStorage key. On a first launch (or an old Pebble
+     install with no `pebble-categories` entry yet) the manager seeds
+     itself with DEFAULT_CATEGORIES and saves them immediately, so
+     every later launch — including this same session's — loads from
+     LocalStorage rather than re-deriving defaults in memory. This is
+     purely architectural: there is still no way to add, rename, or
+     delete a category in the UI. That's Phase B.
+
+     Expenses are untouched by any of this — `expense.category`
+     remains just the category id string it always was, never the
+     full object, so old saved expenses keep loading and validating
+     exactly as before.
+     ================================================================ */
+
+  const CATEGORIES_STORAGE_KEY = 'pebble-categories';
+
+  const DEFAULT_CATEGORIES = [
+    { id: 'food',          name: 'Food',          emoji: '🍔', color: 'var(--category-food)',          isDefault: true },
+    { id: 'transport',     name: 'Transport',     emoji: '🚕', color: 'var(--category-transport)',     isDefault: true },
+    { id: 'shopping',      name: 'Shopping',      emoji: '🛍️', color: 'var(--category-shopping)',      isDefault: true },
+    { id: 'health',        name: 'Health',        emoji: '💊', color: 'var(--category-health)',        isDefault: true },
+    { id: 'college',       name: 'College',       emoji: '🎓', color: 'var(--category-college)',       isDefault: true },
+    { id: 'hostel',        name: 'Hostel',        emoji: '🏠', color: 'var(--category-hostel)',        isDefault: true },
+    { id: 'entertainment', name: 'Entertainment', emoji: '🎮', color: 'var(--category-entertainment)', isDefault: true },
+    { id: 'others',        name: 'Others',        emoji: '📦', color: 'var(--category-others)',        isDefault: true }
   ];
 
-  // Quick id -> category lookup, used whenever an expense card needs
-  // its name/icon resolved.
-  const CATEGORY_MAP = new Map(CATEGORIES.map((category) => [category.id, category]));
+  // In-memory category collection + its id -> category lookup. Both
+  // are populated exclusively by loadCategories() below and never
+  // mutated directly anywhere else in this file (there's nothing yet
+  // that adds/edits/removes a category — that's Phase B).
+  let categories = [];
+  let categoryMap = new Map();
 
   /**
-   * Resolves a category's CSS custom property (defined in
-   * style.css) to its computed color value, so colors are never
-   * duplicated or hardcoded here — style.css stays the one source
-   * of truth for the palette. Used by the dashboard's category
-   * summary/chart and, since TASK 5, by Analytics' Category
-   * Breakdown bars too.
+   * Schema check for a single category loaded from LocalStorage.
+   * Mirrors isValidExpense()'s "reject, don't repair" philosophy —
+   * everything from LocalStorage is untrusted.
+   * @param {*} category
+   * @returns {boolean}
+   */
+  function isValidCategory(category) {
+    return Boolean(
+      category &&
+      typeof category === 'object' &&
+      typeof category.id === 'string' && category.id.trim() !== '' &&
+      typeof category.name === 'string' && category.name.trim() !== '' &&
+      typeof category.emoji === 'string' && category.emoji.trim() !== '' &&
+      typeof category.color === 'string' && category.color.trim() !== '' &&
+      typeof category.isDefault === 'boolean'
+    );
+  }
+
+  function rebuildCategoryMap() {
+    categoryMap = new Map(categories.map((category) => [category.id, category]));
+  }
+
+  /**
+   * Persists the current in-memory `categories` array. Called after
+   * loadCategories() seeds/repairs it, so LocalStorage and memory
+   * never disagree. (No other code path mutates `categories` yet.)
+   */
+  function saveCategories() {
+    try {
+      localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(categories));
+    } catch (error) {
+      console.error('Pebble: failed to save categories.', error);
+    }
+  }
+
+  /**
+   * Loads categories from LocalStorage into `categories`/`categoryMap`.
+   * On first launch (nothing saved yet), or if what's saved is
+   * missing/corrupted/invalid, falls back to DEFAULT_CATEGORIES and
+   * writes them back out — so the app always has a usable category
+   * collection and later launches read the same defaults from
+   * storage instead of re-deriving them.
+   */
+  function loadCategories() {
+    let raw;
+    try {
+      raw = localStorage.getItem(CATEGORIES_STORAGE_KEY);
+    } catch (error) {
+      console.error('Pebble: LocalStorage is unavailable for categories.', error);
+      categories = DEFAULT_CATEGORIES;
+      rebuildCategoryMap();
+      return;
+    }
+
+    if (!raw) {
+      // First launch of v1.5.0 (or a pre-v1.5.0 install migrating
+      // for the first time) — seed with defaults and persist them.
+      categories = DEFAULT_CATEGORIES;
+      rebuildCategoryMap();
+      saveCategories();
+      return;
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (error) {
+      console.error('Pebble: saved categories are corrupted, resetting to defaults.', error);
+      categories = DEFAULT_CATEGORIES;
+      rebuildCategoryMap();
+      saveCategories();
+      return;
+    }
+
+    if (Array.isArray(parsed) && parsed.length > 0 && parsed.every(isValidCategory)) {
+      categories = parsed;
+    } else {
+      console.error('Pebble: saved categories failed validation, resetting to defaults.');
+      categories = DEFAULT_CATEGORIES;
+    }
+    rebuildCategoryMap();
+    saveCategories();
+  }
+
+  loadCategories();
+
+  /**
+   * Returns the full category collection. Callers must treat this
+   * as read-only — there is no mutation path yet (Phase B).
+   * @returns {Array<{id:string,name:string,emoji:string,color:string,isDefault:boolean}>}
+   */
+  function getCategories() {
+    return categories;
+  }
+
+  /**
+   * @param {string} id
+   * @returns {{id:string,name:string,emoji:string,color:string,isDefault:boolean}|undefined}
+   */
+  function getCategoryById(id) {
+    return categoryMap.get(id);
+  }
+
+  /**
+   * @param {string} id
+   * @returns {boolean}
+   */
+  function categoryExists(id) {
+    return categoryMap.has(id);
+  }
+
+  /**
+   * @param {string} id
+   * @returns {string} the category's name, or "Others" if unknown.
+   */
+  function getCategoryName(id) {
+    const category = getCategoryById(id);
+    return category ? category.name : 'Others';
+  }
+
+  /**
+   * @param {string} id
+   * @returns {string} the category's emoji, or a neutral fallback if unknown.
+   */
+  function getCategoryEmoji(id) {
+    const category = getCategoryById(id);
+    return category ? category.emoji : '📦';
+  }
+
+  /**
+   * Fixed palette custom categories are assigned from, one at a
+   * time, cycling by how many custom categories already exist —
+   * distinct from the 8 default hues above so a custom category is
+   * never visually confused with a default one. Stored as a literal
+   * color directly on the category object (see addCategory() below)
+   * rather than a CSS variable reference, since there is no
+   * `--category-<id>` variable for an id that doesn't exist yet at
+   * build time.
+   */
+  const CUSTOM_CATEGORY_COLOR_PALETTE = [
+    '#F43F5E', '#8B5CF6', '#14B8A6', '#F59E0B',
+    '#0EA5E9', '#84CC16', '#D946EF', '#EAB308'
+  ];
+
+  /**
+   * The one category id nothing may ever delete. It's the mandatory
+   * migration target every deleted category's expenses fall back to
+   * (see deleteCategory() below) — if it could be removed, that
+   * fallback would have nowhere to point.
+   */
+  const PROTECTED_CATEGORY_ID = 'others';
+
+  /**
+   * Turns a category name into a URL/id-safe slug: lowercase, non
+   * alphanumeric runs collapsed to a single hyphen, leading/trailing
+   * hyphens trimmed. Never returns an empty string — falls back to
+   * "category" so a name made entirely of symbols/emoji still gets
+   * a usable id.
+   * @param {string} name
+   * @returns {string}
+   */
+  function slugifyCategoryName(name) {
+    const slug = name
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    return slug || 'category';
+  }
+
+  /**
+   * Generates a category id guaranteed not to collide with any
+   * existing one — starts from the slugified name, then appends a
+   * short random suffix (and keeps trying) if that's already taken.
+   * @param {string} name
+   * @returns {string}
+   */
+  function generateCategoryId(name) {
+    const base = slugifyCategoryName(name);
+    if (!categoryExists(base)) return base;
+
+    let candidate = base;
+    while (categoryExists(candidate)) {
+      candidate = `${base}-${generateId().slice(0, 5)}`;
+    }
+    return candidate;
+  }
+
+  /**
+   * Case/whitespace-insensitive duplicate check against every
+   * existing category name — "Food", "food", and " FOOD " must all
+   * count as the same name (per the Add Category validation spec).
+   * @param {string} name
+   * @returns {boolean}
+   */
+  function isDuplicateCategoryName(name) {
+    const normalized = name.trim().toLowerCase();
+    return getCategories().some((category) => category.name.trim().toLowerCase() === normalized);
+  }
+
+  /**
+   * Creates a new custom category from validated Add Category form
+   * input, persists it, and returns it. Callers (the Add Category
+   * sheet's submit handler) are expected to have already validated
+   * name/emoji are non-empty and the name isn't a duplicate — this
+   * function trusts that and focuses purely on construction +
+   * persistence, mirroring how addExpense-equivalent mutations
+   * elsewhere in this file stay separate from their form's
+   * validation layer.
+   * @param {{name: string, emoji: string}} input
+   * @returns {{id:string,name:string,emoji:string,color:string,isDefault:boolean}}
+   */
+  function addCategory({ name, emoji }) {
+    const trimmedName = name.trim();
+    const trimmedEmoji = emoji.trim();
+    const customCategoryCount = categories.filter((category) => !category.isDefault).length;
+
+    const category = {
+      id: generateCategoryId(trimmedName),
+      name: trimmedName,
+      emoji: trimmedEmoji,
+      color: CUSTOM_CATEGORY_COLOR_PALETTE[customCategoryCount % CUSTOM_CATEGORY_COLOR_PALETTE.length],
+      isDefault: false
+    };
+
+    categories.push(category);
+    rebuildCategoryMap();
+    saveCategories();
+
+    return category;
+  }
+
+  /**
+   * Counts how many saved expenses currently reference a category —
+   * used both to decide the wording of the delete-confirmation
+   * sheet and to know how many expenses deleteCategory() is about
+   * to migrate.
+   * @param {string} categoryId
+   * @returns {number}
+   */
+  function countExpensesUsingCategory(categoryId) {
+    return expenses.filter((expense) => expense.category === categoryId).length;
+  }
+
+  /**
+   * Deletes a category after the caller has already confirmed with
+   * the user. Never deletes an expense: any expense still pointing
+   * at the deleted category is first migrated to the protected
+   * "Others" bucket, exactly like the design spec requires ("Deleting
+   * a category must NEVER delete expenses"). The "Others" category
+   * itself can never be deleted, since it's the one fixed migration
+   * target every other deletion relies on.
+   * @param {string} categoryId
+   * @returns {{success: boolean, migratedCount: number, reason?: 'protected'|'not-found'}}
+   */
+  function deleteCategory(categoryId) {
+    if (categoryId === PROTECTED_CATEGORY_ID) {
+      return { success: false, migratedCount: 0, reason: 'protected' };
+    }
+
+    const index = categories.findIndex((category) => category.id === categoryId);
+    if (index === -1) {
+      return { success: false, migratedCount: 0, reason: 'not-found' };
+    }
+
+    let migratedCount = 0;
+    expenses.forEach((expense) => {
+      if (expense.category === categoryId) {
+        expense.category = PROTECTED_CATEGORY_ID;
+        migratedCount += 1;
+      }
+    });
+
+    categories.splice(index, 1);
+    rebuildCategoryMap();
+    saveCategories();
+
+    if (migratedCount > 0) {
+      saveState();
+    }
+
+    return { success: true, migratedCount };
+  }
+
+  /**
+   * Resolves a category's color to an actual CSS color value. For
+   * Pebble's 8 defaults, `category.color` is still a CSS custom-
+   * property reference (e.g. "var(--category-food)") — style.css
+   * remains the one source of truth for that palette, and this
+   * resolves it exactly as before. Custom categories created via
+   * Manage Categories (v1.5 Phase B) have no matching CSS variable,
+   * so their `category.color` is a literal color value instead
+   * (assigned once at creation from CUSTOM_CATEGORY_COLOR_PALETTE)
+   * and is returned as-is. Used by the dashboard's category summary/
+   * chart and by Analytics' Category Breakdown bars.
    * @param {string} categoryId
    * @returns {string} a CSS color value, e.g. "#F97316"
    */
   function getCategoryColor(categoryId) {
-    return getComputedStyle(document.documentElement)
-      .getPropertyValue(`--category-${categoryId}`)
-      .trim();
+    const category = getCategoryById(categoryId);
+    const rawColor = category ? category.color : 'var(--category-others)';
+
+    const varMatch = /^var\((--[\w-]+)\)$/.exec(rawColor);
+    if (varMatch) {
+      return getComputedStyle(document.documentElement)
+        .getPropertyValue(varMatch[1])
+        .trim();
+    }
+
+    return rawColor;
   }
 
   /**
    * Single source of truth for Payment Method UI (PHASE 11) and its
-   * CSV export label — mirrors the CATEGORIES/CATEGORY_MAP pattern
-   * above rather than introducing a differently-shaped lookup.
+   * CSV export label — mirrors the category manager pattern above
+   * rather than introducing a differently-shaped lookup.
    */
   const PAYMENT_METHODS = [
     { id: 'cash', name: 'Cash', icon: '💵' },
@@ -311,7 +644,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const hasValidId = typeof expense.id === 'string' && expense.id.trim() !== '';
     const hasValidAmount = Number.isFinite(expense.amount) && expense.amount > 0;
-    const hasValidCategory = CATEGORY_MAP.has(expense.category);
+    const hasValidCategory = categoryExists(expense.category);
     const createdAtTime = new Date(expense.createdAt).getTime();
     const hasValidCreatedAt =
       expense.createdAt !== null &&
@@ -817,8 +1150,8 @@ document.addEventListener('DOMContentLoaded', () => {
        analyticsSelectedMonth -> getAnalyticsMonthExpenses() ->
        calculateCategoryBreakdown() -> renderCategoryBreakdown().
        Reuses getAnalyticsMonthExpenses() for the month filtering (no
-       second way of narrowing to a month), CATEGORY_MAP for icon/
-       name, currencyFormatter for amounts, and getCategoryColor()
+       second way of narrowing to a month), the category manager for
+       icon/name, currencyFormatter for amounts, and getCategoryColor()
        for each bar's color — all from section 0, SHARED DATA LAYER.
        Percentages here are intentionally NOT the dashboard's
        percentOfBudget/percentOfSpent (calculateDashboardData(),
@@ -853,11 +1186,11 @@ document.addEventListener('DOMContentLoaded', () => {
         categoryTotals.set(expense.category, current + expense.amount);
       });
 
-      const breakdown = CATEGORIES
+      const breakdown = getCategories()
         .map((category) => ({
           id: category.id,
           name: category.name,
-          icon: category.icon,
+          icon: category.emoji,
           amount: categoryTotals.get(category.id) || 0
         }))
         .filter((category) => category.amount > 0)
@@ -1078,8 +1411,8 @@ document.addEventListener('DOMContentLoaded', () => {
        analyticsSelectedMonth -> getAnalyticsMonthExpenses() ->
        calculateAnalyticsStatistics() -> renderAnalyticsStatistics().
        Reuses getAnalyticsMonthExpenses() for the month filtering (no
-       second way of narrowing to a month), CATEGORY_MAP for the
-       Highest Expense icon/name, and currencyFormatter for amounts —
+       second way of narrowing to a month), the category manager for
+       the Highest Expense icon/name, and currencyFormatter for amounts —
        all from section 0, SHARED DATA LAYER. Per-day totals and
        per-day counts are both derived from a single pass over
        monthExpenses (one Map keyed by day-of-month), so Highest
@@ -1206,8 +1539,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (isEmpty) return;
 
       if (statHighestExpenseEl) {
-        const category = CATEGORY_MAP.get(statsData.highestExpense.category);
-        const icon = category ? category.icon : '📦';
+        const category = getCategoryById(statsData.highestExpense.category);
+        const icon = category ? category.emoji : '📦';
         const name = category ? category.name : statsData.highestExpense.category;
 
         statHighestExpenseEl.innerHTML = `
@@ -1649,6 +1982,29 @@ document.addEventListener('DOMContentLoaded', () => {
   // just the settings row that navigates there.
   const openAnalyticsBtn = document.getElementById('open-analytics-btn');
 
+  // Manage Categories (v1.5 Phase B) — the Settings row, its bottom
+  // sheet, the nested Add Category sheet, and the nested Delete
+  // Category confirmation sheet. All three sheets follow the exact
+  // same show/hide pattern as the Budget/Expense Detail sheets above.
+  const openManageCategoriesBtn = document.getElementById('open-manage-categories-btn');
+  const manageCategoriesSheetOverlay = document.getElementById('manage-categories-sheet-overlay');
+  const manageCategoriesCloseBtn = document.getElementById('manage-categories-close-btn');
+  const manageCategoriesList = document.getElementById('manage-categories-list');
+  const addCategoryBtn = document.getElementById('add-category-btn');
+
+  const addCategorySheetOverlay = document.getElementById('add-category-sheet-overlay');
+  const addCategoryForm = document.getElementById('add-category-form');
+  const addCategoryNameInput = document.getElementById('add-category-name-input');
+  const addCategoryEmojiInput = document.getElementById('add-category-emoji-input');
+  const addCategoryEmojiPresets = document.getElementById('add-category-emoji-presets');
+  const addCategoryErrorEl = document.getElementById('add-category-error');
+  const addCategoryCancelBtn = document.getElementById('add-category-cancel-btn');
+
+  const deleteCategorySheetOverlay = document.getElementById('delete-category-sheet-overlay');
+  const deleteCategoryMessageEl = document.getElementById('delete-category-message');
+  const deleteCategoryCancelBtn = document.getElementById('delete-category-cancel-btn');
+  const deleteCategoryConfirmBtn = document.getElementById('delete-category-confirm-btn');
+
 
   /* ================================================================
      2. APPLICATION STATE
@@ -1706,7 +2062,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // reopens with an empty search.
   let searchQuery = '';
 
-  // lastPaymentMethod, CATEGORIES/CATEGORY_MAP, PAYMENT_METHODS/
+  // lastPaymentMethod, the category manager, PAYMENT_METHODS/
   // PAYMENT_METHOD_MAP, and currencyFormatter now live in section 0
   // (SHARED DATA LAYER) at the top of this file, so both index.html
   // and analytics.html can reach them. Only dateFormatter — used
@@ -1788,7 +2144,7 @@ document.addEventListener('DOMContentLoaded', () => {
    * Structure mirrors the original static markup so existing CSS
    * (.category-btn, .category-icon, .category-name, the
    * per-category "-selected" color rules) keeps working untouched.
-   * @param {{id: string, name: string, icon: string}} category
+   * @param {{id: string, name: string, emoji: string}} category
    * @returns {HTMLButtonElement}
    */
   function createCategoryButton(category) {
@@ -1797,10 +2153,17 @@ document.addEventListener('DOMContentLoaded', () => {
     button.className = 'category-btn';
     button.dataset.category = category.id;
     button.setAttribute('aria-label', category.name);
+    // Fallback accent for custom categories, which have no matching
+    // .category-btn[data-category="..."] rule in style.css (that
+    // file only hardcodes Pebble's 8 defaults). See the low-
+    // specificity fallback rule in style.css section 23 — it never
+    // wins over the default rules, only applies where they don't
+    // match.
+    button.style.setProperty('--btn-accent', getCategoryColor(category.id));
 
     const icon = document.createElement('span');
     icon.className = 'category-icon';
-    icon.textContent = category.icon;
+    icon.textContent = category.emoji;
 
     const name = document.createElement('span');
     name.className = 'category-name';
@@ -1813,13 +2176,14 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /**
-   * Clears and rebuilds the category selector from CATEGORIES.
-   * Called once on load; safe to call again if categories ever
-   * become dynamic (e.g. user-defined categories in a later phase).
+   * Clears and rebuilds the category selector from the category
+   * manager. Called once on load; safe to call again if categories
+   * ever become dynamic (e.g. user-defined categories in a later
+   * phase) — the dropdown always reflects getCategories() exactly.
    */
   function renderCategories() {
     categorySelector.innerHTML = '';
-    CATEGORIES.forEach((category) => {
+    getCategories().forEach((category) => {
       categorySelector.appendChild(createCategoryButton(category));
     });
   }
@@ -2068,7 +2432,7 @@ document.addEventListener('DOMContentLoaded', () => {
    * @returns {HTMLLIElement}
    */
   function createExpenseCard(expense) {
-    const categoryData = CATEGORY_MAP.get(expense.category);
+    const categoryData = getCategoryById(expense.category);
 
     const item = document.createElement('li');
     item.className = 'expense-item';
@@ -2078,8 +2442,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Icon
     const icon = document.createElement('span');
     icon.className = 'expense-category-icon';
-    icon.textContent = categoryData ? categoryData.icon : '✨';
+    icon.textContent = categoryData ? categoryData.emoji : '✨';
     icon.setAttribute('aria-hidden', 'true');
+    // Fallback accent for custom categories — see the matching note
+    // in createCategoryButton() above and style.css section 23.
+    icon.style.setProperty('--icon-accent', getCategoryColor(expense.category));
 
     // Name + optional note + timestamp
     const details = document.createElement('div');
@@ -2328,11 +2695,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // ---- sorted highest first. Percentages of both budget and    ----
     // ---- total spent are precomputed here so no consumer (bar,   ----
     // ---- summary, chart) ever recalculates a percentage itself.  ----
-    const categoryBreakdown = CATEGORIES
+    const categoryBreakdown = getCategories()
       .map((category) => ({
         id: category.id,
         name: category.name,
-        icon: category.icon,
+        icon: category.emoji,
         amount: categoryTotals.get(category.id) || 0
       }))
       .filter((category) => category.amount > 0)
@@ -2361,7 +2728,7 @@ document.addEventListener('DOMContentLoaded', () => {
      rendering fully separated.
 
      getCategoryColor() now lives in section 0 (SHARED DATA LAYER),
-     alongside CATEGORY_MAP, so analytics.html's Category Breakdown
+     alongside the rest of the category manager, so analytics.html's Category Breakdown
      (TASK 5) can reuse it too instead of re-resolving category CSS
      variables its own way.
      ================================================================ */
@@ -2688,18 +3055,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /**
    * Fills the sheet's DOM from a single expense object. Reads only
-   * from the expense passed in plus the same CATEGORY_MAP /
+   * from the expense passed in plus the same category manager /
    * PAYMENT_METHOD_MAP / currencyFormatter / dateFormatter
    * createExpenseCard() already uses — no new formatting rules, no
    * duplicate expense object is created.
    * @param {object} expense
    */
   function populateExpenseSheet(expense) {
-    const categoryData = CATEGORY_MAP.get(expense.category);
+    const categoryData = getCategoryById(expense.category);
     const paymentMethodData = PAYMENT_METHOD_MAP.get(expense.paymentMethod);
     const createdAt = new Date(expense.createdAt);
 
-    expenseDetailIconEl.textContent = categoryData ? categoryData.icon : '✨';
+    expenseDetailIconEl.textContent = categoryData ? categoryData.emoji : '✨';
     expenseDetailCategoryEl.textContent = categoryData ? categoryData.name : 'Others';
     expenseDetailAmountEl.textContent = currencyFormatter.format(expense.amount);
 
@@ -3112,7 +3479,7 @@ document.addEventListener('DOMContentLoaded', () => {
    * amount (both the raw number and the currencyFormatter-formatted
    * string, so "470", "1200", and partial digits like "12" all match
    * ₹470 / ₹1,200 the same way createExpenseCard() would display
-   * them). Reuses the same CATEGORY_MAP / PAYMENT_METHOD_MAP /
+   * them). Reuses the same category manager / PAYMENT_METHOD_MAP /
    * currencyFormatter createExpenseCard() already uses, so a match
    * here is always something the user can actually see on the card.
    * Returns the same array unchanged when there's no query — never
@@ -3130,7 +3497,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!query) return expenseList;
 
     return expenseList.filter((expense) => {
-      const categoryData = CATEGORY_MAP.get(expense.category);
+      const categoryData = getCategoryById(expense.category);
       const paymentMethodData = PAYMENT_METHOD_MAP.get(expense.paymentMethod);
 
       const searchableFields = [
@@ -3589,6 +3956,275 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
   /* ================================================================
+     19.2 MANAGE CATEGORIES (v1.5 Phase B)
+     The first user-facing feature built on the Category Foundation
+     (section 0.4). Three stacked bottom sheets, all following the
+     exact same show/hide pattern as the Budget/Expense Detail sheets
+     above: Manage Categories (list + Add Category entry point),
+     Add Category (name + emoji form), and Delete Category
+     (confirmation, worded differently depending on whether the
+     category is currently in use).
+
+     LIVE UPDATE: every mutation here (add or delete) ends with the
+     same two calls — renderCategories() (rebuilds the Add Expense
+     dropdown from getCategories()) and refreshUI() (rebuilds
+     expense cards, dashboard, category summary, and chart from
+     `expenses`, all of which already resolve category name/emoji/
+     color live via the category manager, section 0.4). That's every
+     place on index.html a category can appear, so nothing here
+     needs its own bespoke re-render. CSV export reads
+     getCategoryName() at export time, so it's automatically current
+     too. Analytics lives on a separate page and reads categories
+     fresh from LocalStorage on its own load — there is no moment
+     where both pages are on screen at once for a "live" cross-page
+     update to matter.
+     ================================================================ */
+
+  function openManageCategoriesSheet() {
+    renderManageCategoriesList();
+    manageCategoriesSheetOverlay.hidden = false;
+    void manageCategoriesSheetOverlay.offsetWidth;
+    manageCategoriesSheetOverlay.classList.remove('sheet-hidden');
+  }
+
+  function closeManageCategoriesSheet() {
+    manageCategoriesSheetOverlay.classList.add('sheet-hidden');
+    window.setTimeout(() => {
+      manageCategoriesSheetOverlay.hidden = true;
+    }, 280);
+  }
+
+  if (openManageCategoriesBtn) {
+    openManageCategoriesBtn.addEventListener('click', openManageCategoriesSheet);
+  }
+  manageCategoriesCloseBtn.addEventListener('click', closeManageCategoriesSheet);
+  manageCategoriesSheetOverlay.addEventListener('click', (event) => {
+    if (event.target === manageCategoriesSheetOverlay) {
+      closeManageCategoriesSheet();
+    }
+  });
+
+  /**
+   * Builds one row for the Manage Categories list: emoji, name, a
+   * "Default" badge only when isDefault is true, and a delete
+   * button. The protected "Others" category still gets a delete
+   * button (never hidden) so the row shape stays consistent, but
+   * tapping it explains why via a toast instead of opening the
+   * confirmation sheet.
+   * @param {{id:string,name:string,emoji:string,isDefault:boolean}} category
+   * @returns {HTMLLIElement}
+   */
+  function createManageCategoryRow(category) {
+    const row = document.createElement('li');
+    row.className = 'manage-category-row';
+    row.dataset.categoryId = category.id;
+
+    const icon = document.createElement('span');
+    icon.className = 'manage-category-icon';
+    icon.textContent = category.emoji;
+    icon.setAttribute('aria-hidden', 'true');
+
+    const name = document.createElement('p');
+    name.className = 'manage-category-name';
+    name.textContent = category.name;
+
+    row.append(icon, name);
+
+    if (category.isDefault) {
+      const badge = document.createElement('span');
+      badge.className = 'manage-category-badge';
+      badge.textContent = 'Default';
+      row.appendChild(badge);
+    }
+
+    const isProtected = category.id === PROTECTED_CATEGORY_ID;
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'manage-category-delete-btn';
+    if (isProtected) deleteBtn.classList.add('manage-category-delete-protected');
+    deleteBtn.setAttribute('aria-label', `Delete ${category.name}`);
+    deleteBtn.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
+      </svg>
+    `;
+    deleteBtn.addEventListener('click', () => handleDeleteCategoryTap(category.id));
+
+    row.appendChild(deleteBtn);
+    return row;
+  }
+
+  /**
+   * Clears and rebuilds the Manage Categories list from the category
+   * manager. Called every time the sheet opens, and again after any
+   * add/delete so it never shows stale data while still on screen.
+   */
+  function renderManageCategoriesList() {
+    manageCategoriesList.innerHTML = '';
+    getCategories().forEach((category) => {
+      manageCategoriesList.appendChild(createManageCategoryRow(category));
+    });
+  }
+
+  /* ---------------- Add Category ---------------- */
+
+  function openAddCategorySheet() {
+    addCategoryForm.reset();
+    addCategoryErrorEl.hidden = true;
+    addCategoryEmojiPresets.querySelectorAll('.emoji-preset-btn').forEach((btn) => {
+      btn.classList.remove('emoji-preset-selected');
+    });
+    addCategorySheetOverlay.hidden = false;
+    void addCategorySheetOverlay.offsetWidth;
+    addCategorySheetOverlay.classList.remove('sheet-hidden');
+    addCategoryNameInput.focus();
+  }
+
+  function closeAddCategorySheet() {
+    addCategorySheetOverlay.classList.add('sheet-hidden');
+    window.setTimeout(() => {
+      addCategorySheetOverlay.hidden = true;
+    }, 220);
+  }
+
+  addCategoryBtn.addEventListener('click', openAddCategorySheet);
+  addCategoryCancelBtn.addEventListener('click', closeAddCategorySheet);
+  addCategorySheetOverlay.addEventListener('click', (event) => {
+    if (event.target === addCategorySheetOverlay) {
+      closeAddCategorySheet();
+    }
+  });
+
+  // Tapping a preset fills (and visually selects) the emoji field —
+  // the field itself stays a real text input, so a user can still
+  // type any other emoji it doesn't cover.
+  addCategoryEmojiPresets.querySelectorAll('.emoji-preset-btn').forEach((presetBtn) => {
+    presetBtn.addEventListener('click', () => {
+      addCategoryEmojiInput.value = presetBtn.dataset.emoji;
+      addCategoryEmojiPresets.querySelectorAll('.emoji-preset-btn').forEach((btn) => {
+        btn.classList.remove('emoji-preset-selected');
+      });
+      presetBtn.classList.add('emoji-preset-selected');
+    });
+  });
+
+  /**
+   * Shows a validation message inline in the Add Category sheet —
+   * never alert()/prompt(), matching every other native-feeling
+   * validation surface in this app (e.g. #custom-range-error).
+   * @param {string} message
+   */
+  function showAddCategoryError(message) {
+    addCategoryErrorEl.textContent = message;
+    addCategoryErrorEl.hidden = false;
+  }
+
+  addCategoryForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+
+    const name = addCategoryNameInput.value.trim();
+    const emoji = addCategoryEmojiInput.value.trim();
+
+    if (!name) {
+      showAddCategoryError('Please enter a category name.');
+      return;
+    }
+    if (!emoji) {
+      showAddCategoryError('Please choose or type an emoji.');
+      return;
+    }
+    if (isDuplicateCategoryName(name)) {
+      showAddCategoryError('A category with this name already exists.');
+      return;
+    }
+
+    addCategory({ name, emoji });
+
+    closeAddCategorySheet();
+    renderManageCategoriesList();
+    renderCategories();
+    refreshUI();
+    showToast('success', 'Category Added');
+  });
+
+  /* ---------------- Delete Category ---------------- */
+
+  // The category id the Delete Category sheet is currently acting
+  // on, set right before the sheet opens and read by its Confirm
+  // button — same pattern as `activeDetailExpenseId` above.
+  let pendingDeleteCategoryId = null;
+
+  function openDeleteCategorySheet(categoryId, expenseCount) {
+    pendingDeleteCategoryId = categoryId;
+    const category = getCategoryById(categoryId);
+    const categoryLabel = category ? category.name : 'this category';
+
+    deleteCategoryMessageEl.textContent = expenseCount > 0
+      ? `"${categoryLabel}" is used by ${expenseCount} expense${expenseCount === 1 ? '' : 's'}. Deleting it will move ${expenseCount === 1 ? 'that expense' : 'those expenses'} to "Others". This can't be undone.`
+      : `Delete "${categoryLabel}"? This can't be undone.`;
+
+    deleteCategorySheetOverlay.hidden = false;
+    void deleteCategorySheetOverlay.offsetWidth;
+    deleteCategorySheetOverlay.classList.remove('sheet-hidden');
+  }
+
+  function closeDeleteCategorySheet() {
+    deleteCategorySheetOverlay.classList.add('sheet-hidden');
+    window.setTimeout(() => {
+      deleteCategorySheetOverlay.hidden = true;
+    }, 220);
+    pendingDeleteCategoryId = null;
+  }
+
+  deleteCategoryCancelBtn.addEventListener('click', closeDeleteCategorySheet);
+  deleteCategorySheetOverlay.addEventListener('click', (event) => {
+    if (event.target === deleteCategorySheetOverlay) {
+      closeDeleteCategorySheet();
+    }
+  });
+
+  /**
+   * Handles a tap on a category row's delete button. The protected
+   * "Others" category never opens the confirmation sheet — it
+   * explains itself via a toast instead, since there is nothing a
+   * confirmation could meaningfully ask ("delete, and migrate its
+   * expenses to... itself"?).
+   * @param {string} categoryId
+   */
+  function handleDeleteCategoryTap(categoryId) {
+    if (categoryId === PROTECTED_CATEGORY_ID) {
+      showToast('error', '"Others" is required and can\u2019t be deleted.');
+      return;
+    }
+    openDeleteCategorySheet(categoryId, countExpensesUsingCategory(categoryId));
+  }
+
+  deleteCategoryConfirmBtn.addEventListener('click', () => {
+    if (!pendingDeleteCategoryId) return;
+
+    const result = deleteCategory(pendingDeleteCategoryId);
+    closeDeleteCategorySheet();
+
+    if (!result.success) {
+      // Defensive only — handleDeleteCategoryTap() already filters
+      // out the protected id before this sheet can even open, and a
+      // 'not-found' category can't reach here either since the row
+      // it came from is only ever built from a real category.
+      showToast('error', 'Could not delete this category.');
+      return;
+    }
+
+    renderManageCategoriesList();
+    renderCategories();
+    refreshUI();
+    showToast('success', result.migratedCount > 0 ? 'Category Deleted \u00b7 Expenses Moved' : 'Category Deleted');
+  });
+
+
+  /* ================================================================
      20. CSV EXPORT (PHASE 10 + PHASE 11)
      Exports the full `expenses` array (not the currently filtered
      view — Export Data is about the whole history) as a CSV file,
@@ -3610,8 +4246,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /**
    * Builds the CSV string for every expense currently in state.
-   * Reuses CATEGORY_MAP for the category name shown in the UI,
-   * rather than exporting the raw category id, and reuses
+   * Reuses the category manager for the category name shown in the
+   * UI, rather than exporting the raw category id, and reuses
    * formatDateForInput for a plain, spreadsheet-friendly date.
    *
    * PHASE 11: a new "Payment Method" column is appended, exporting
@@ -3627,7 +4263,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const header = ['Date', 'Amount', 'Category', 'Note', 'Payment Method'];
     const rows = expenses.map((expense) => {
       const date = formatDateForInput(new Date(expense.createdAt));
-      const category = CATEGORY_MAP.get(expense.category)?.name || expense.category;
+      const category = getCategoryById(expense.category)?.name || expense.category;
       const note = expense.note || '';
       const paymentMethod = PAYMENT_METHOD_MAP.get(expense.paymentMethod)?.name || '';
       return [date, expense.amount.toFixed(2), category, note, paymentMethod];
@@ -3696,6 +4332,14 @@ document.addEventListener('DOMContentLoaded', () => {
            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M5 12.5 10 17.5 19 7"/>
       </svg>
+    `,
+    // v1.5 Phase B — Manage Categories' "this category is protected"
+    // toast is the first caller that needs a non-success icon.
+    error: `
+      <svg viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.5"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+      </svg>
     `
   };
 
@@ -3724,6 +4368,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (toastHideTimeoutId) window.clearTimeout(toastHideTimeoutId);
 
     toastIconEl.innerHTML = TOAST_ICONS[icon] || TOAST_ICONS.success;
+    toastIconEl.style.backgroundColor = icon === 'error' ? 'var(--color-danger)' : '';
     toastMessageEl.textContent = message;
 
     toastEl.hidden = false;

@@ -1993,3 +1993,177 @@ input:focus-visible,
 .delete-btn:active {
   transform: scale(0.98);
 }
+
+/* ================================================================
+   23. MANAGE CATEGORIES (v1.5 Phase B)
+   Reuses the same tokens as everything above — cards, bottom
+   sheets, .save-btn/.cancel-btn/.delete-btn, .field-error, the
+   .expense-detail-sheet taller/scrollable shell — nothing new is
+   introduced beyond what this section actually needs.
+   ================================================================ */
+
+/* -- Stacking: the Add Category sheet and Delete confirmation sheet
+   open on top of the Manage Categories sheet, which is itself a
+   normal .sheet-overlay (z-index 40). Both reuse .add-category-
+   overlay purely as a z-index bump — nothing else about them
+   differs from a standard .sheet-overlay/.bottom-sheet. -- */
+.add-category-overlay {
+  z-index: 50;
+}
+
+/* -- Category list rows -- */
+.manage-categories-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  text-align: left;
+  overflow-y: auto;
+}
+
+.manage-category-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+}
+
+.manage-category-icon {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background-color: var(--color-card);
+  font-size: 17px;
+}
+
+.manage-category-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.manage-category-badge {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 3px var(--space-2);
+  letter-spacing: 0.3px;
+}
+
+.manage-category-delete-btn {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--color-danger);
+  transition: background-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.manage-category-delete-btn:hover {
+  background-color: var(--color-border);
+}
+
+.manage-category-delete-btn:active {
+  transform: scale(0.9);
+}
+
+/* The Others bucket is structurally required as the migration
+   target for deleted categories' expenses, so its delete control is
+   muted rather than removed — tapping it still explains why via the
+   existing toast, it never fails silently. */
+.manage-category-delete-btn.manage-category-delete-protected {
+  color: var(--color-text-disabled);
+}
+
+/* -- Add Category form -- */
+.add-category-field {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  text-align: left;
+}
+
+.add-category-emoji-input {
+  text-align: center;
+  font-size: 24px;
+}
+
+.add-category-emoji-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding-top: var(--space-1);
+}
+
+.emoji-preset-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-button);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  font-size: 18px;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.emoji-preset-btn:hover {
+  background-color: var(--color-border);
+}
+
+.emoji-preset-btn:active {
+  transform: scale(0.92);
+}
+
+.emoji-preset-btn.emoji-preset-selected {
+  border-color: var(--color-text-primary);
+  box-shadow: inset 0 0 0 1px var(--color-text-primary);
+}
+
+#add-category-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.delete-category-message {
+  text-align: center;
+}
+
+/* -- Colored accents for custom categories, whose ids have no
+   matching --category-* CSS variable (see the per-id rules in
+   sections 7 and 10 above, which only cover Pebble's 8 defaults).
+   Both places already colored per-category set this custom property
+   inline (see script.js, createCategoryButton()/createExpenseCard())
+   for EVERY category, default or custom; the lower-specificity
+   fallback rules here only ever win for ids that have no matching
+   attribute-selector rule above, so no default category's look
+   changes by a single pixel. -- */
+.category-btn.category-btn-selected {
+  color: var(--btn-accent, var(--color-text-primary));
+}
+
+.expense-item .expense-category-icon {
+  color: var(--icon-accent, inherit);
+}

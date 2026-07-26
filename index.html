@@ -226,41 +226,11 @@
         Others        -> Gray
       -->
 
-      <!-- Category Selector -->
-      <div id="category-selector" class="category-selector" role="group" aria-label="Category">
-        <button type="button" class="category-btn" data-category="food" aria-label="Food">
-          <span class="category-icon">🍔</span>
-          <span class="category-name">Food</span>
-        </button>
-        <button type="button" class="category-btn" data-category="transport" aria-label="Transport">
-          <span class="category-icon">🚕</span>
-          <span class="category-name">Transport</span>
-        </button>
-        <button type="button" class="category-btn" data-category="shopping" aria-label="Shopping">
-          <span class="category-icon">🛍</span>
-          <span class="category-name">Shopping</span>
-        </button>
-        <button type="button" class="category-btn" data-category="entertainment" aria-label="Entertainment">
-          <span class="category-icon">🎬</span>
-          <span class="category-name">Entertainment</span>
-        </button>
-        <button type="button" class="category-btn" data-category="college" aria-label="College">
-          <span class="category-icon">📚</span>
-          <span class="category-name">College</span>
-        </button>
-        <button type="button" class="category-btn" data-category="health" aria-label="Health">
-          <span class="category-icon">💊</span>
-          <span class="category-name">Health</span>
-        </button>
-        <button type="button" class="category-btn" data-category="hostel" aria-label="Hostel">
-          <span class="category-icon">🏠</span>
-          <span class="category-name">Hostel</span>
-        </button>
-        <button type="button" class="category-btn" data-category="others" aria-label="Others">
-          <span class="category-icon">✨</span>
-          <span class="category-name">Others</span>
-        </button>
-      </div>
+      <!-- Category Selector — intentionally empty. renderCategories()
+           in script.js builds every button here from the category
+           manager (getCategories()) on load, so this markup is never
+           hand-authored and can never drift out of sync with it. -->
+      <div id="category-selector" class="category-selector" role="group" aria-label="Category"></div>
       <input type="hidden" id="expense-category-input" name="category" required aria-label="Selected category">
 
       <!-- Payment Method Selector -->
@@ -474,6 +444,128 @@
   </div>
 
   <!-- ============================================================
+       MANAGE CATEGORIES BOTTOM SHEET (v1.5 Phase B)
+       Opens from the "Manage Categories" row in Settings. Reuses the
+       same taller, scrollable sheet shell as the Expense Detail
+       sheet above (.expense-detail-sheet is generic enough to reuse
+       here rather than duplicating the height/scroll/drag-handle
+       rules for a second sheet). Every row is built by script.js
+       from the category manager (getCategories()) — never
+       hand-authored — so it can never drift out of sync with it.
+       ============================================================ -->
+  <div id="manage-categories-sheet-overlay" class="sheet-overlay expense-detail-overlay sheet-hidden" hidden>
+    <section
+      id="manage-categories-sheet"
+      class="bottom-sheet expense-detail-sheet"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="manage-categories-title"
+    >
+      <button type="button" id="manage-categories-close-btn" class="expense-detail-close-btn" aria-label="Close">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+
+      <div class="sheet-drag-handle" aria-hidden="true"></div>
+
+      <h2 id="manage-categories-title" class="bottom-sheet-title">Manage Categories</h2>
+
+      <button type="button" id="add-category-btn" class="save-btn" aria-label="Add Category">+ Add Category</button>
+
+      <ul id="manage-categories-list" class="manage-categories-list">
+        <!-- Category rows injected by script.js -->
+      </ul>
+    </section>
+  </div>
+
+  <!-- ============================================================
+       ADD CATEGORY SHEET (v1.5 Phase B)
+       Opens on top of the Manage Categories sheet (higher z-index,
+       see style.css) when "+ Add Category" is tapped. Native form
+       fields only — no prompt()/alert() anywhere in this flow.
+       ============================================================ -->
+  <div id="add-category-sheet-overlay" class="sheet-overlay add-category-overlay sheet-hidden" hidden>
+    <section
+      id="add-category-sheet"
+      class="bottom-sheet"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="add-category-sheet-title"
+    >
+      <h2 id="add-category-sheet-title" class="bottom-sheet-title">Add Category</h2>
+
+      <form id="add-category-form">
+        <div class="add-category-field">
+          <label for="add-category-emoji-input" class="date-field-label">Emoji</label>
+          <input
+            type="text"
+            id="add-category-emoji-input"
+            name="emoji"
+            class="note-input add-category-emoji-input"
+            placeholder="🙂"
+            maxlength="4"
+            autocomplete="off"
+            aria-label="Category emoji"
+          >
+          <div id="add-category-emoji-presets" class="add-category-emoji-presets" role="group" aria-label="Emoji suggestions">
+            <button type="button" class="emoji-preset-btn" data-emoji="🍕">🍕</button>
+            <button type="button" class="emoji-preset-btn" data-emoji="🚌">🚌</button>
+            <button type="button" class="emoji-preset-btn" data-emoji="💊">💊</button>
+            <button type="button" class="emoji-preset-btn" data-emoji="📚">📚</button>
+            <button type="button" class="emoji-preset-btn" data-emoji="🎉">🎉</button>
+            <button type="button" class="emoji-preset-btn" data-emoji="🏋️">🏋️</button>
+            <button type="button" class="emoji-preset-btn" data-emoji="✈️">✈️</button>
+            <button type="button" class="emoji-preset-btn" data-emoji="🐾">🐾</button>
+          </div>
+        </div>
+
+        <div class="add-category-field">
+          <label for="add-category-name-input" class="date-field-label">Name</label>
+          <input
+            type="text"
+            id="add-category-name-input"
+            name="name"
+            class="note-input"
+            placeholder="e.g. Groceries"
+            maxlength="24"
+            autocomplete="off"
+            aria-label="Category name"
+          >
+        </div>
+
+        <p id="add-category-error" class="field-error" role="alert" hidden></p>
+
+        <div class="bottom-sheet-actions">
+          <button type="button" id="add-category-cancel-btn" class="cancel-btn" aria-label="Cancel">Cancel</button>
+          <button type="submit" id="add-category-save-btn" class="save-btn" aria-label="Save category">Save</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <!-- ============================================================
+       DELETE CATEGORY CONFIRMATION SHEET (v1.5 Phase B)
+       Native Pebble confirmation — replaces the browser's confirm()
+       for this one flow. Tells the user exactly how many expenses
+       (if any) will be migrated to "Others" before they confirm.
+       ============================================================ -->
+  <div id="delete-category-sheet-overlay" class="sheet-overlay add-category-overlay sheet-hidden" hidden>
+    <section
+      id="delete-category-sheet"
+      class="bottom-sheet"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="delete-category-sheet-title"
+    >
+      <h2 id="delete-category-sheet-title" class="bottom-sheet-title">Delete Category?</h2>
+      <p id="delete-category-message" class="settings-section-description delete-category-message"></p>
+      <div class="bottom-sheet-actions">
+        <button type="button" id="delete-category-cancel-btn" class="cancel-btn" aria-label="Cancel">Cancel</button>
+        <button type="button" id="delete-category-confirm-btn" class="delete-btn" aria-label="Confirm delete">Delete</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============================================================
        SETTINGS PANEL (right-side slide-over)
        Hidden by default. Opens when the Settings icon in the Home
        header is tapped. JavaScript controls visibility, the
@@ -511,6 +603,26 @@
             <span>Analytics</span>
             <svg class="settings-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
           </a>
+        </section>
+
+        <!-- ==================== MANAGE CATEGORIES ====================
+             v1.5 Phase B. Same visual row style as Analytics above,
+             but opens the Manage Categories bottom sheet instead of
+             navigating away — Pebble's existing bottom-sheet
+             architecture (see #manage-categories-sheet-overlay near
+             the other sheets further down), not a new page. -->
+        <section class="settings-section">
+          <button
+            type="button"
+            id="open-manage-categories-btn"
+            class="settings-section-toggle"
+            aria-label="Manage Categories"
+            aria-haspopup="dialog"
+            aria-controls="manage-categories-sheet"
+          >
+            <span>Manage Categories</span>
+            <svg class="settings-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
         </section>
 
         <!-- ==================== EXPORT DATA ==================== -->
