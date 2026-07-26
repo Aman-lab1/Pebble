@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://aman-lab1.github.io/Pebble/sitemap.xml
