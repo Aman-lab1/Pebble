@@ -16,10 +16,20 @@ Pebble is built around one simple philosophy:
 
 > Spend less time tracking your money, and more time living your life.
 
-No accounts.
-No ads.
-No subscriptions.
+No accounts.  
+No ads.  
+No subscriptions.  
 Your data stays on your device.
+
+---
+
+## ⭐ Highlights
+
+- 🔒 Privacy-first — your data never leaves your device
+- 📶 Works completely offline
+- 📱 Installable as a Progressive Web App (PWA)
+- 📊 Built-in analytics and smart spending insights
+- ⚡ Fast, minimalist, distraction-free experience
 
 ---
 
@@ -29,6 +39,8 @@ Your data stays on your device.
 
 - Quick expense logging
 - Edit & delete expenses
+- Expense Detail Sheet
+- Search expenses by category, note, payment method, or amount
 - Dynamic categories
 - Cash & Digital payment tracking
 - Remembers your last payment method
@@ -43,14 +55,14 @@ Your data stays on your device.
 
 ### 📈 Analytics
 
-- Monthly summary cards
-- Daily spending trend
-- Category breakdown
-- Payment method breakdown
-- Monthly statistics
-- Smart spending insights
+- Monthly Summary Cards
+- Daily Spending Trend
+- Category Breakdown
+- Payment Method Breakdown
+- Monthly Statistics
+- Smart Spending Insights
 
-### 🔍 Filters
+### 🔍 Filters & Search
 
 - Today
 - Week
@@ -58,6 +70,7 @@ Your data stays on your device.
 - Year
 - All Time
 - Custom Date Range
+- Instant expense search
 
 ### 📤 Utilities
 
@@ -138,9 +151,7 @@ Pebble will now appear on your Home Screen and launch like a native app.
 
 2. Tap the **⋮** (three-dot menu).
 
-3. Tap **Install and Create Shortcut**.
-
-4. Confirm by tapping **Install**.
+3. Tap **Install**.
 
 Pebble will now launch as a standalone app from your Home Screen.
 
@@ -148,18 +159,35 @@ Pebble will now launch as a standalone app from your Home Screen.
 
 # 📦 Current Version
 
-## Pebble v1.2
+## Pebble v1.4.0
 
 ### What's New
 
-### 📊 Analytics Dashboard
+### 🔍 Search Experience
+
+- Instant expense search
+- Search by category
+- Search by note
+- Search by payment method
+- Search by amount
+- Improved empty-state messaging for search results
+
+### 📄 Expense Detail Sheet
+
+- Native bottom-sheet experience
+- Complete expense information
+- Quick Edit and Delete actions
+- Frosted-glass backdrop
+- Smooth slide-up animations
+
+### 📊 Analytics
 
 - Monthly Summary Cards
 - Daily Spending Trend
 - Category Breakdown
 - Payment Method Breakdown
 - Monthly Statistics
-- Smart Insights
+- Smart Spending Insights
 
 ### 💵 Payment Improvements
 
@@ -167,18 +195,13 @@ Pebble will now launch as a standalone app from your Home Screen.
 - Payment usage analytics
 - Last payment method remembered
 
-### ✨ User Experience
-
-- Native success confirmations
-- Better interaction feedback
-- Reduced accidental text selection
-- Smoother transitions and animations
-- Improved analytics navigation
-
 ### 🛠 Developer Improvements
 
 - Google Analytics 4 integration
 - Microsoft Clarity integration
+- Google Search Console verification
+- Sitemap.xml & robots.txt
+- Updated PWA icons and manifest
 - Improved offline caching
 - Cleaner analytics architecture
 
@@ -188,6 +211,8 @@ Pebble will now launch as a standalone app from your Home Screen.
 
 ### Upcoming
 
+- Manage Categories
+- Custom Categories
 - Budget alerts
 - Smart notifications
 - Cloud backup (optional)

@@ -1591,6 +1591,24 @@ document.addEventListener('DOMContentLoaded', () => {
   const budgetAmountInput = document.getElementById('budget-amount-input');
   const budgetCancelBtn = document.getElementById('budget-cancel-btn');
 
+  // Expense Detail bottom sheet (v1.4.0 — TASK 10, integrating with
+  // existing markup, same show/hide pattern as the budget sheet
+  // above). Edit/Delete inside it call the existing
+  // startEditExpense()/deleteExpense() functions — see section 15.5.
+  const expenseDetailSheetOverlay = document.getElementById('expense-detail-sheet-overlay');
+  const expenseDetailSheet = document.getElementById('expense-detail-sheet');
+  const expenseDetailCloseBtn = document.getElementById('expense-detail-close-btn');
+  const expenseDetailIconEl = document.getElementById('expense-detail-icon');
+  const expenseDetailCategoryEl = document.getElementById('expense-detail-category');
+  const expenseDetailAmountEl = document.getElementById('expense-detail-amount');
+  const expenseDetailPaymentEl = document.getElementById('expense-detail-payment');
+  const expenseDetailDateEl = document.getElementById('expense-detail-date');
+  const expenseDetailTimeEl = document.getElementById('expense-detail-time');
+  const expenseDetailNoteCard = document.getElementById('expense-detail-note-card');
+  const expenseDetailNoteText = document.getElementById('expense-detail-note-text');
+  const expenseDetailEditBtn = document.getElementById('expense-detail-edit-btn');
+  const expenseDetailDeleteBtn = document.getElementById('expense-detail-delete-btn');
+
   // History filters (PHASE 7) — static buttons already in the
   // markup; captured once since the set never changes at runtime.
   const filterButtons = document.querySelectorAll('#history-filters .filter-btn');
@@ -1645,6 +1663,18 @@ document.addEventListener('DOMContentLoaded', () => {
   // an existing expense (identified by id) rather than create a
   // new one. See PHASE 5.
   let editingExpenseId = null;
+
+  // The id of the expense currently shown in the Expense Detail
+  // bottom sheet (v1.4.0 — TASK 10), or null when the sheet is
+  // closed. Set by openExpenseSheet(); read by its Edit/Delete
+  // buttons so they always act on the expense actually on screen.
+  let activeDetailExpenseId = null;
+
+  // Remembers document.body's inline overflow value from before the
+  // Expense Detail sheet locked background scrolling, so closing it
+  // restores exactly what was there rather than assuming '' or
+  // 'auto'. See openExpenseSheet()/closeExpenseSheet().
+  let bodyOverflowBeforeSheet = '';
 
   // The active time filter (PHASE 7). Never touches `expenses`
   // itself — it only decides what applyCurrentFilter() returns.
@@ -2121,6 +2151,15 @@ document.addEventListener('DOMContentLoaded', () => {
       menuBtn.setAttribute('aria-expanded', String(willOpen));
     });
 
+    // Tapping the card (v1.4.0 — TASK 10) opens the Expense Detail
+    // sheet. menuBtn's and menu's own click handlers above already
+    // call event.stopPropagation(), so this never fires for taps on
+    // the three-dot menu or its Edit/Delete items — only genuine
+    // taps on the card body reach here.
+    item.addEventListener('click', () => {
+      openExpenseSheet(expense.id);
+    });
+
     item.append(icon, details, amount, menuBtn, menu);
     return item;
   }
@@ -2568,20 +2607,25 @@ document.addEventListener('DOMContentLoaded', () => {
    * renderExpenses()/updateDashboard() rebuild everything from the
    * updated array. No dashboard value is adjusted by hand.
    * @param {string} id
+   * @returns {boolean} true if the expense was actually deleted
+   *   (i.e. the confirmation was accepted), false otherwise — lets
+   *   callers like the Expense Detail sheet (v1.4.0 — TASK 10) know
+   *   whether to close themselves or stay open after a cancel.
    */
   function deleteExpense(id) {
     const confirmed = window.confirm(
       'Delete this expense?\n\nThis action cannot be undone.'
     );
-    if (!confirmed) return;
+    if (!confirmed) return false;
 
     const index = expenses.findIndex((expense) => expense.id === id);
-    if (index === -1) return;
+    if (index === -1) return false;
 
     expenses.splice(index, 1);
 
     saveState();
     refreshUI();
+    return true;
   }
 
   /**
@@ -2621,6 +2665,173 @@ document.addEventListener('DOMContentLoaded', () => {
     saveExpenseBtn.textContent = 'Save Changes';
 
     showAddExpenseScreen();
+  }
+
+
+  /* ================================================================
+     15.5 EXPENSE DETAIL BOTTOM SHEET (v1.4.0 — TASK 10)
+     A reusable UI component, not a rewrite of the expense list.
+     Tapping any expense card opens it; it shows the complete detail
+     of that one expense; Edit/Delete inside it call the existing
+     startEditExpense()/deleteExpense() by id — nothing here
+     duplicates that logic or holds its own copy of the expense.
+     Four separate responsibilities, same convention as the rest of
+     this file (one calculation/render/update per feature):
+       - populateExpenseSheet() : fills the sheet's DOM from an expense
+       - openExpenseSheet()     : looks the expense up, populates, shows
+       - closeExpenseSheet()    : hides, restores scroll/focus
+       - attachExpenseSheetEvents() : wires dismissal + Edit/Delete,
+                                       called once at init
+     ================================================================ */
+
+  const EXPENSE_DETAIL_SHEET_TRANSITION_MS = 280;
+
+  /**
+   * Fills the sheet's DOM from a single expense object. Reads only
+   * from the expense passed in plus the same CATEGORY_MAP /
+   * PAYMENT_METHOD_MAP / currencyFormatter / dateFormatter
+   * createExpenseCard() already uses — no new formatting rules, no
+   * duplicate expense object is created.
+   * @param {object} expense
+   */
+  function populateExpenseSheet(expense) {
+    const categoryData = CATEGORY_MAP.get(expense.category);
+    const paymentMethodData = PAYMENT_METHOD_MAP.get(expense.paymentMethod);
+    const createdAt = new Date(expense.createdAt);
+
+    expenseDetailIconEl.textContent = categoryData ? categoryData.icon : '✨';
+    expenseDetailCategoryEl.textContent = categoryData ? categoryData.name : 'Others';
+    expenseDetailAmountEl.textContent = currencyFormatter.format(expense.amount);
+
+    expenseDetailPaymentEl.textContent = paymentMethodData
+      ? `${paymentMethodData.icon} ${paymentMethodData.name}`
+      : '—';
+
+    expenseDetailDateEl.textContent = createdAt.toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+    expenseDetailTimeEl.textContent = createdAt.toLocaleTimeString('en-IN', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+
+    // Note card: only shown when a note actually exists — no empty
+    // note section is ever rendered (same hidden-attribute pattern
+    // as #expense-history-empty / #analytics-categories-empty).
+    if (expense.note) {
+      expenseDetailNoteText.textContent = expense.note;
+      expenseDetailNoteCard.hidden = false;
+    } else {
+      expenseDetailNoteText.textContent = '';
+      expenseDetailNoteCard.hidden = true;
+    }
+
+    // Budget Impact: architecture is ready (the row + its value
+    // span already exist in the markup, hidden) but there is no
+    // defined per-expense budget correlation yet, so it's never
+    // un-hidden here. A future task can populate
+    // #expense-detail-budget-impact-value and flip `hidden = false`
+    // right here without touching anything else in this function.
+  }
+
+  /**
+   * Opens the Expense Detail sheet for a given expense id: looks it
+   * up via the same findExpenseById() Edit/Delete already use,
+   * populates the sheet, locks background scrolling, and slides the
+   * sheet up. Silently does nothing if the id can't be found (e.g.
+   * stale reference after a concurrent delete).
+   * @param {string} id
+   */
+  function openExpenseSheet(id) {
+    const expense = findExpenseById(id);
+    if (!expense) return;
+
+    activeDetailExpenseId = id;
+    populateExpenseSheet(expense);
+
+    bodyOverflowBeforeSheet = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    expenseDetailSheetOverlay.hidden = false;
+    // Force a reflow before removing the hidden class so the
+    // slide-up transition actually runs instead of jumping straight
+    // to its open state — same technique openSettingsPanel() uses.
+    void expenseDetailSheetOverlay.offsetWidth;
+    expenseDetailSheetOverlay.classList.remove('sheet-hidden');
+
+    // Moves focus into the sheet for keyboard accessibility.
+    expenseDetailCloseBtn.focus();
+  }
+
+  /**
+   * Closes the Expense Detail sheet: slides it down, restores
+   * background scrolling to whatever it was before opening, and —
+   * after the slide-down transition finishes — hides it from
+   * layout/the accessibility tree and forgets which expense it was
+   * showing.
+   */
+  function closeExpenseSheet() {
+    expenseDetailSheetOverlay.classList.add('sheet-hidden');
+    document.body.style.overflow = bodyOverflowBeforeSheet;
+
+    window.setTimeout(() => {
+      expenseDetailSheetOverlay.hidden = true;
+      activeDetailExpenseId = null;
+    }, EXPENSE_DETAIL_SHEET_TRANSITION_MS);
+  }
+
+  /**
+   * Wires every way the sheet can be dismissed or acted on. Called
+   * once at init (section 22) — createExpenseCard() only ever calls
+   * openExpenseSheet(), never re-attaches these.
+   */
+  function attachExpenseSheetEvents() {
+    expenseDetailCloseBtn.addEventListener('click', closeExpenseSheet);
+
+    // Tapping the dimmed backdrop closes it — a click only lands on
+    // the overlay itself when it didn't land on the sheet (or
+    // anything inside it), same pattern as the Settings panel.
+    expenseDetailSheetOverlay.addEventListener('click', (event) => {
+      if (event.target === expenseDetailSheetOverlay) {
+        closeExpenseSheet();
+      }
+    });
+
+    // Escape closes it, but only while it's actually open — this
+    // listener is always attached, so it checks state itself rather
+    // than being added/removed on open/close (same as the Settings
+    // panel's Escape handler).
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !expenseDetailSheetOverlay.hidden) {
+        closeExpenseSheet();
+      }
+    });
+
+    // Edit: close the sheet, then hand off to the exact same
+    // startEditExpense() the three-dot menu uses — no duplicated
+    // form-preload logic.
+    expenseDetailEditBtn.addEventListener('click', () => {
+      if (!activeDetailExpenseId) return;
+      const id = activeDetailExpenseId;
+      closeExpenseSheet();
+      startEditExpense(id);
+    });
+
+    // Delete: hand off to the exact same deleteExpense() the
+    // three-dot menu uses. Its confirm() dialog runs first — the
+    // sheet only closes if that was accepted (deleteExpense()
+    // returns true), so cancelling leaves the sheet open exactly as
+    // the person left it.
+    expenseDetailDeleteBtn.addEventListener('click', () => {
+      if (!activeDetailExpenseId) return;
+      const wasDeleted = deleteExpense(activeDetailExpenseId);
+      if (wasDeleted) {
+        closeExpenseSheet();
+      }
+    });
   }
 
 
@@ -3546,6 +3757,7 @@ document.addEventListener('DOMContentLoaded', () => {
   renderCategories();
   applyPaymentMethodSelection(lastPaymentMethod);
   updateFilterButtonStates(currentFilter);
+  attachExpenseSheetEvents();
   refreshUI();
 
 });

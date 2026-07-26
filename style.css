@@ -1790,3 +1790,206 @@ input:focus-visible,
 #analytics-next-month-btn:disabled:hover {
   opacity: 0.5;
 }
+
+
+/* ================================================================
+   23. EXPENSE DETAIL SHEET (v1.4.0 — TASK 10)
+   Reuses .sheet-overlay / .bottom-sheet / .sheet-hidden /
+   .bottom-sheet-actions / .save-btn wholesale from section 9 above
+   — only what's genuinely new lives here. Every new rule is scoped
+   to .expense-detail-overlay / .expense-detail-sheet / .expense-
+   detail-* so none of it can leak onto the Monthly Budget sheet or
+   Custom Range sheet, which stay pixel-for-pixel unchanged.
+   ================================================================ */
+
+/* -- Backdrop: blur + soft dark, never a harsh black screen -- */
+.expense-detail-overlay {
+  background-color: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* -- Sheet shell: ~55–60% of viewport height, own slide timing -- */
+.expense-detail-sheet {
+  position: relative;
+  height: 58vh;
+  max-height: 620px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-top: var(--space-6);
+  padding-bottom: calc(var(--space-5) + env(safe-area-inset-bottom, 0px));
+  /* Ease-out slide, no bounce/overshoot — same property the base
+     .bottom-sheet rule animates, just a slightly longer, smoother
+     curve for this taller sheet. */
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* -- Drag handle -- */
+.sheet-drag-handle {
+  position: absolute;
+  top: var(--space-2);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background-color: var(--color-border);
+}
+
+/* -- Close button (top-right corner) -- */
+.expense-detail-close-btn {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--color-text-secondary);
+  background-color: var(--color-surface);
+  transition: background-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.expense-detail-close-btn:hover {
+  background-color: var(--color-border);
+}
+
+.expense-detail-close-btn:active {
+  transform: scale(0.92);
+}
+
+/* -- Header: large emoji, category name, amount -- */
+.expense-detail-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding-top: var(--space-2);
+}
+
+.expense-detail-icon {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background-color: var(--color-surface);
+  font-size: 32px;
+  margin-bottom: var(--space-2);
+}
+
+.expense-detail-category {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.expense-detail-amount {
+  font-size: var(--font-size-card-amount);
+  font-weight: var(--font-weight-bold);
+}
+
+/* -- Detail rows: icon + label + value, one per line -- */
+.expense-detail-rows {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: 0 var(--space-3);
+}
+
+.expense-detail-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.expense-detail-rows .expense-detail-row:last-child {
+  border-bottom: none;
+}
+
+.expense-detail-row[hidden] {
+  display: none;
+}
+
+.expense-detail-row-icon {
+  flex: 0 0 auto;
+  width: 20px;
+  font-size: 16px;
+  text-align: center;
+}
+
+.expense-detail-row-label {
+  flex: 1 1 auto;
+  font-size: var(--font-size-small);
+  color: var(--color-text-secondary);
+}
+
+.expense-detail-row-value {
+  flex: 0 0 auto;
+  max-width: 55%;
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* -- Note card: only rendered into view when a note exists -- */
+.expense-detail-note-card {
+  width: 100%;
+  text-align: left;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: var(--space-3);
+}
+
+.expense-detail-note-card[hidden] {
+  display: none;
+}
+
+.expense-detail-note-text {
+  font-size: var(--font-size-body);
+  color: var(--color-text-primary);
+  margin-top: var(--space-1);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* -- Actions: Edit / Delete, equal width -- */
+.expense-detail-actions {
+  width: 100%;
+  margin-top: auto;
+}
+
+.delete-btn {
+  width: 100%;
+  padding: var(--space-3);
+  border-radius: var(--radius-button);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-danger);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  text-align: center;
+  transition: background-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.delete-btn:hover {
+  background-color: var(--color-border);
+}
+
+.delete-btn:active {
+  transform: scale(0.98);
+}

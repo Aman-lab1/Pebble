@@ -398,6 +398,82 @@
   </div>
 
   <!-- ============================================================
+       EXPENSE DETAIL BOTTOM SHEET (v1.4.0 — TASK 10)
+       Hidden by default. Opens when an expense card in the history
+       list is tapped (script.js — openExpenseSheet()/
+       closeExpenseSheet()/populateExpenseSheet()). Shows the full
+       detail of a single expense; Edit and Delete below trigger the
+       exact same startEditExpense()/deleteExpense() functions the
+       existing three-dot menu already uses — no business logic is
+       duplicated here. Reuses .sheet-overlay/.bottom-sheet/
+       .bottom-sheet-actions from the Monthly Budget sheet above;
+       only adds what's genuinely new (see style.css section 23).
+       ============================================================ -->
+  <div id="expense-detail-sheet-overlay" class="sheet-overlay expense-detail-overlay sheet-hidden" hidden>
+    <section
+      id="expense-detail-sheet"
+      class="bottom-sheet expense-detail-sheet"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="expense-detail-category"
+    >
+      <button type="button" id="expense-detail-close-btn" class="expense-detail-close-btn" aria-label="Close">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+
+      <div class="sheet-drag-handle" aria-hidden="true"></div>
+
+      <!-- Header: large category emoji + name + amount, the visual
+           focus of the sheet. -->
+      <header class="expense-detail-header">
+        <span id="expense-detail-icon" class="expense-detail-icon" aria-hidden="true"></span>
+        <p id="expense-detail-category" class="expense-detail-category"></p>
+        <p id="expense-detail-amount" class="expense-detail-amount"></p>
+      </header>
+
+      <!-- Detail rows: Payment Method, Date, Time. Budget Impact is
+           architecture-ready but stays hidden — no per-expense
+           budget correlation exists yet for it to show. -->
+      <div class="expense-detail-rows">
+        <div class="expense-detail-row">
+          <span class="expense-detail-row-icon" aria-hidden="true">&#128179;</span>
+          <span class="expense-detail-row-label">Payment Method</span>
+          <span id="expense-detail-payment" class="expense-detail-row-value"></span>
+        </div>
+        <div class="expense-detail-row">
+          <span class="expense-detail-row-icon" aria-hidden="true">&#128197;</span>
+          <span class="expense-detail-row-label">Date</span>
+          <span id="expense-detail-date" class="expense-detail-row-value"></span>
+        </div>
+        <div class="expense-detail-row">
+          <span class="expense-detail-row-icon" aria-hidden="true">&#128337;</span>
+          <span class="expense-detail-row-label">Time</span>
+          <span id="expense-detail-time" class="expense-detail-row-value"></span>
+        </div>
+        <div id="expense-detail-budget-impact" class="expense-detail-row" hidden>
+          <span class="expense-detail-row-icon" aria-hidden="true">&#128202;</span>
+          <span class="expense-detail-row-label">Budget Impact</span>
+          <span id="expense-detail-budget-impact-value" class="expense-detail-row-value"></span>
+        </div>
+      </div>
+
+      <!-- Note card — only shown when the expense actually has a
+           note (populateExpenseSheet() toggles `hidden`); no empty
+           note section is ever rendered. -->
+      <div id="expense-detail-note-card" class="expense-detail-note-card" hidden>
+        <p class="card-label">Note</p>
+        <p id="expense-detail-note-text" class="expense-detail-note-text"></p>
+      </div>
+
+      <!-- Actions -->
+      <div class="bottom-sheet-actions expense-detail-actions">
+        <button type="button" id="expense-detail-edit-btn" class="save-btn" aria-label="Edit expense">Edit</button>
+        <button type="button" id="expense-detail-delete-btn" class="delete-btn" aria-label="Delete expense">Delete</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============================================================
        SETTINGS PANEL (right-side slide-over)
        Hidden by default. Opens when the Settings icon in the Home
        header is tapped. JavaScript controls visibility, the
