@@ -9,7 +9,7 @@
 // behind as a harmless but stale orphan entry.)
 // =====================================================
 
-const CACHE_NAME = "pebble-v1.3.1";
+const CACHE_NAME = "pebble-v1.3.2";
 
 const STATIC_ASSETS = [
   "./",
@@ -18,8 +18,11 @@ const STATIC_ASSETS = [
   "./style.css",
   "./script.js",
   "./manifest.json",
-  "./icons/icon-192.png",
-  "./icons/icon-512.png"
+  "./favicon.ico",
+  "./favicon-96x96.png",
+  "./icons/apple-touch-icon.png",
+  "./icons/web-app-manifest-192x192.png",
+  "./icons/web-app-manifest-512x512.png"
 ];
 
 // ----------------------------
