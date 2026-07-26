@@ -1598,6 +1598,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const historyFiltersNav = document.getElementById('history-filters');
   const filtersScrollHint = document.getElementById('filters-scroll-hint');
 
+  // Search bar (TASK 9) — sits below the filters, searches within
+  // whatever currentFilter already narrowed `expenses` down to.
+  const expenseSearchInput = document.getElementById('expense-search-input');
+  const expenseSearchClearBtn = document.getElementById('expense-search-clear-btn');
+
   // Custom date range sheet (PHASE 7.5 — integrating with existing
   // bottom sheet markup, same pattern as the budget sheet above)
   const customRangeSheetOverlay = document.getElementById('custom-range-sheet-overlay');
@@ -1662,6 +1667,14 @@ document.addEventListener('DOMContentLoaded', () => {
     from: null,
     to: null
   };
+
+  // The current search text (TASK 9), always applied on top of
+  // whatever currentFilter/customDateRange already narrowed
+  // `expenses` down to — never against the full `expenses` array
+  // directly. Exactly like currentFilter/customDateRange above,
+  // this is in-memory only and never persisted; the app always
+  // reopens with an empty search.
+  let searchQuery = '';
 
   // lastPaymentMethod, CATEGORIES/CATEGORY_MAP, PAYMENT_METHODS/
   // PAYMENT_METHOD_MAP, and currencyFormatter now live in section 0
@@ -2122,14 +2135,48 @@ document.addEventListener('DOMContentLoaded', () => {
      ================================================================ */
 
   /**
-   * Shows the "no expenses yet" state when the given list is empty,
-   * hides it otherwise. Reflects whatever list renderExpenses() was
-   * given — so filtering into an empty result correctly shows the
-   * empty state even if `expenses` itself isn't empty.
-   * @param {Array} expenseList
+   * The two messages #expense-history-empty can show (TASK 9.1) —
+   * kept as the exact same markup/classes the element already had,
+   * just swapped in dynamically instead of always being the
+   * "no expenses yet" copy. No second empty-state element is
+   * introduced; this is still the one existing component.
    */
-  function toggleEmptyState(expenseList) {
-    expenseHistoryEmpty.hidden = expenseList.length > 0;
+  const EMPTY_STATE_NO_EXPENSES_HTML = `
+        <strong>No expenses yet.</strong><br>
+        Start by tapping the <strong>＋</strong> button below.
+      `;
+  const EMPTY_STATE_NO_MATCHES_HTML = `
+        <strong>No matching expenses found.</strong><br>
+        Try another keyword or clear the search.
+      `;
+
+  /**
+   * Shows the empty state when the given (post-search) list is
+   * empty, hides it otherwise. Reflects whatever list
+   * renderExpenses() was given — so filtering into an empty result
+   * correctly shows the empty state even if `expenses` itself isn't
+   * empty.
+   *
+   * `hasDateFilteredResults` (TASK 9.1) is what tells the two empty
+   * causes apart: applyCurrentFilter() already narrowed `expenses`
+   * down to the active date filter before applySearchFilter() ever
+   * ran, so if that date-filtered set had entries and the list
+   * we're rendering is still empty, it was the search that emptied
+   * it out — not a genuine absence of expenses. Only then does the
+   * copy change; a genuinely empty date filter keeps the original
+   * "No expenses yet" message unchanged.
+   * @param {Array} expenseList
+   * @param {boolean} [hasDateFilteredResults=false]
+   */
+  function toggleEmptyState(expenseList, hasDateFilteredResults = false) {
+    const isEmpty = expenseList.length === 0;
+    expenseHistoryEmpty.hidden = !isEmpty;
+
+    if (!isEmpty) return;
+
+    expenseHistoryEmpty.innerHTML = hasDateFilteredResults
+      ? EMPTY_STATE_NO_MATCHES_HTML
+      : EMPTY_STATE_NO_EXPENSES_HTML;
   }
 
   /**
@@ -2143,8 +2190,9 @@ document.addEventListener('DOMContentLoaded', () => {
    * order expenses were created, which is what persistence/sync
    * layers expect.
    * @param {Array} [expenseList=expenses]
+   * @param {boolean} [hasDateFilteredResults=false] see toggleEmptyState() (TASK 9.1)
    */
-  function renderExpenses(expenseList = expenses) {
+  function renderExpenses(expenseList = expenses, hasDateFilteredResults = false) {
     expenseHistoryList.innerHTML = '';
 
     [...expenseList]
@@ -2153,7 +2201,7 @@ document.addEventListener('DOMContentLoaded', () => {
         expenseHistoryList.appendChild(createExpenseCard(expense));
       });
 
-    toggleEmptyState(expenseList);
+    toggleEmptyState(expenseList, hasDateFilteredResults);
   }
 
   // Close any open three-dot menu when clicking outside of it.
@@ -2704,12 +2752,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
   /* ================================================================
-     18. EXPENSE FILTERING (PHASE 7 + PHASE 7.5)
+     18. EXPENSE FILTERING (PHASE 7 + PHASE 7.5 + TASK 9)
      `expenses` is never filtered in place — it stays the single
      source of truth, untouched. This section's only job is to
-     decide, from `currentFilter` (and, for Custom, `customDateRange`),
-     which subset of `expenses` should currently be displayed, and
-     to refresh the UI with that subset.
+     decide, from `currentFilter` (and, for Custom, `customDateRange`)
+     plus `searchQuery`, which subset of `expenses` should currently
+     be displayed, and to refresh the UI with that subset.
 
      Flow:
        expenses (master array)
@@ -2718,21 +2766,39 @@ document.addEventListener('DOMContentLoaded', () => {
        currentFilter
              │
              ▼
-       applyCurrentFilter()
+       applyCurrentFilter()      ── date/range filter
+             │
+             ▼
+       dateFilteredExpenses
+             │
+             ▼
+       searchQuery
+             │
+             ▼
+       applySearchFilter()       ── search filter (TASK 9)
              │
              ▼
        filteredExpenses
              │
              └── renderExpenses(filteredExpenses)
 
+     Search is one extra step bolted onto the end of the existing
+     pipeline, never a second/duplicate filtering path — it only
+     ever narrows whatever applyCurrentFilter() already returned, so
+     it's mechanically impossible for a search to reach outside the
+     active date filter (e.g. searching "pizza" under "This Month"
+     can only search this month's expenses; only under "All" does it
+     search the entire `expenses` array).
+
      updateDashboard() (PHASE 3/4) always receives the full
      `expenses` array, never filteredExpenses — the history filter
-     is purely visual and only ever decides what the expense list
-     below shows (PHASE 12 makes calculateDashboardData() the one
-     place "this month" is defined for budget purposes). The Custom
-     filter (PHASE 7.5) is not a special case anywhere else in the
-     app: it just makes applyCurrentFilter() check an upper bound as
-     well as a lower one.
+     (and, now, search) are purely visual and only ever decide what
+     the expense list below shows (PHASE 12 makes
+     calculateDashboardData() the one place "this month" is defined
+     for budget purposes). The Custom filter (PHASE 7.5) is not a
+     special case anywhere else in the app: it just makes
+     applyCurrentFilter() check an upper bound as well as a lower
+     one.
      ================================================================ */
 
   /**
@@ -2828,6 +2894,47 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /**
+   * Narrows a list of expenses down to the ones matching
+   * `searchQuery` (TASK 9, extended by TASK 9.1) — case-insensitive,
+   * matching against the expense's title (the category name shown
+   * on its card), note, category name, payment method name, and now
+   * amount (both the raw number and the currencyFormatter-formatted
+   * string, so "470", "1200", and partial digits like "12" all match
+   * ₹470 / ₹1,200 the same way createExpenseCard() would display
+   * them). Reuses the same CATEGORY_MAP / PAYMENT_METHOD_MAP /
+   * currencyFormatter createExpenseCard() already uses, so a match
+   * here is always something the user can actually see on the card.
+   * Returns the same array unchanged when there's no query — never
+   * a special "search mode" the rest of the pipeline has to know
+   * about. Never mutates the list it's given, and never looks at
+   * `expenses` directly — it only ever receives whatever
+   * applyCurrentFilter() already narrowed things down to, which is
+   * what keeps a search scoped to the active date filter instead of
+   * the whole database.
+   * @param {Array} expenseList
+   * @returns {Array}
+   */
+  function applySearchFilter(expenseList) {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return expenseList;
+
+    return expenseList.filter((expense) => {
+      const categoryData = CATEGORY_MAP.get(expense.category);
+      const paymentMethodData = PAYMENT_METHOD_MAP.get(expense.paymentMethod);
+
+      const searchableFields = [
+        categoryData ? categoryData.name : '',
+        expense.note || '',
+        paymentMethodData ? paymentMethodData.name : '',
+        expense.amount.toString(),
+        currencyFormatter.format(expense.amount)
+      ];
+
+      return searchableFields.some((field) => field.toLowerCase().includes(query));
+    });
+  }
+
+  /**
    * Marks exactly one filter button as active, both visually
    * (existing .filter-btn-active class + design language already
    * defined in style.css) and for assistive tech (aria-current).
@@ -2917,10 +3024,15 @@ document.addEventListener('DOMContentLoaded', () => {
    * instead of duplicating this sequence.
    */
   function refreshUI() {
-    const filteredExpenses = applyCurrentFilter(expenses);
-    renderExpenses(filteredExpenses);
+    const dateFilteredExpenses = applyCurrentFilter(expenses);
+    const filteredExpenses = applySearchFilter(dateFilteredExpenses);
+    renderExpenses(filteredExpenses, dateFilteredExpenses.length > 0);
     updateDashboard(expenses);
-    renderFilterDescription(generateFilterDescription(filteredExpenses));
+    // The filter subtitle describes the active date filter itself
+    // (e.g. "Showing this week's expenses"), so it's generated from
+    // dateFilteredExpenses — search narrowing the visible list
+    // further doesn't change what date range is active.
+    renderFilterDescription(generateFilterDescription(dateFilteredExpenses));
     updateExportButtonState();
   }
 
@@ -3087,6 +3199,34 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       setFilter(btn.dataset.filter);
     });
+  });
+
+  /**
+   * Shows the clear (×) button only while there's search text to
+   * clear — mirrors the hidden-attribute pattern used everywhere
+   * else in the file (e.g. #expense-history-empty).
+   */
+  function updateSearchClearButtonState() {
+    expenseSearchClearBtn.hidden = searchQuery.length === 0;
+  }
+
+  // No debounce (per spec — filtering the in-memory `expenses`
+  // array is fast enough). Every keystroke just updates
+  // `searchQuery` and re-runs the same refreshUI() every other
+  // mutation already goes through, so search never needs its own
+  // rendering path.
+  expenseSearchInput.addEventListener('input', () => {
+    searchQuery = expenseSearchInput.value;
+    updateSearchClearButtonState();
+    refreshUI();
+  });
+
+  expenseSearchClearBtn.addEventListener('click', () => {
+    searchQuery = '';
+    expenseSearchInput.value = '';
+    updateSearchClearButtonState();
+    expenseSearchInput.focus();
+    refreshUI();
   });
 
   /**

@@ -462,6 +462,67 @@ body::-webkit-scrollbar,
   padding: 0 var(--space-1);
 }
 
+/* -- Search bar (TASK 9) --
+   Same dark card background/radius as .card, deliberately without
+   .card's border — spec calls for no border, no shadow, no glow.
+   Pinned via CSS `position: sticky` only (no JS) so it stays put
+   while #expense-history-list scrolls underneath it; `top: 0` is
+   enough because the nearest scrolling ancestor here is the
+   document itself, same as every other sticky-free element in
+   .screen today. */
+.search-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--color-card);
+  border: none;
+  border-radius: var(--radius-card);
+  box-shadow: none;
+}
+
+.search-bar-icon {
+  flex: 0 0 auto;
+  color: var(--color-text-secondary);
+}
+
+.search-bar-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--font-size-body);
+  color: var(--color-text-primary);
+}
+
+.search-bar-input::placeholder {
+  color: var(--color-text-secondary);
+}
+
+.search-bar-clear-btn {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  color: var(--color-text-secondary);
+  background-color: var(--color-surface);
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.search-bar-clear-btn:hover {
+  background-color: var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.search-bar-clear-btn[hidden] {
+  display: none;
+}
+
 /* -- Save / Cancel buttons -- */
 .save-btn {
   width: 100%;
