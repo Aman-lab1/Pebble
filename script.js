@@ -2005,6 +2005,25 @@ document.addEventListener('DOMContentLoaded', () => {
   const deleteCategoryCancelBtn = document.getElementById('delete-category-cancel-btn');
   const deleteCategoryConfirmBtn = document.getElementById('delete-category-confirm-btn');
 
+  // Backup & Restore (v1.7) — the Settings row, its bottom sheet
+  // (two actions: Backup Data / Restore Data), and the two nested
+  // confirmation sheets. Same stacked-sheet shape as Manage
+  // Categories/Add Category/Delete Category above.
+  const openBackupRestoreBtn = document.getElementById('open-backup-restore-btn');
+  const backupRestoreSheetOverlay = document.getElementById('backup-restore-sheet-overlay');
+  const backupRestoreCloseBtn = document.getElementById('backup-restore-close-btn');
+  const downloadBackupBtn = document.getElementById('download-backup-btn');
+  const restoreBackupBtn = document.getElementById('restore-backup-btn');
+
+  const backupConfirmSheetOverlay = document.getElementById('backup-confirm-sheet-overlay');
+  const backupConfirmCancelBtn = document.getElementById('backup-confirm-cancel-btn');
+  const backupConfirmDownloadBtn = document.getElementById('backup-confirm-download-btn');
+
+  const restoreConfirmSheetOverlay = document.getElementById('restore-confirm-sheet-overlay');
+  const restoreConfirmCancelBtn = document.getElementById('restore-confirm-cancel-btn');
+  const restoreConfirmChooseFileBtn = document.getElementById('restore-confirm-choose-file-btn');
+  const restoreFileInput = document.getElementById('restore-file-input');
+
 
   /* ================================================================
      2. APPLICATION STATE
@@ -2991,6 +3010,7 @@ document.addEventListener('DOMContentLoaded', () => {
     expenses.splice(index, 1);
 
     saveState();
+    evaluateBudgetAlerts();
     refreshUI();
     return true;
   }
@@ -3266,6 +3286,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ---- Update memory first, then persist, then re-render ----
     saveState();
+    // delayFirstToast: true — waits for the Expense Saved/Updated
+    // toast below to fully finish before any budget-alert toast
+    // starts, so the two never compete over showToast()'s timers.
+    evaluateBudgetAlerts({ delayFirstToast: true });
     refreshUI();
     resetForm();
     showHomeScreen();
@@ -4225,6 +4249,359 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
   /* ================================================================
+     19.3 BACKUP & RESTORE (v1.7)
+     Fully offline — no backend, no accounts, no cloud storage. A
+     backup is just a JSON snapshot of everything Pebble already
+     persists to LocalStorage under its three existing keys
+     (STORAGE_KEY, CATEGORIES_STORAGE_KEY, BUDGET_ALERTS_STORAGE_KEY
+     — see sections 0, 0.4, and 21.5), downloaded as a file; a
+     restore reverses that by writing a validated file's contents
+     back into those same three keys and then calling the exact same
+     loadState()/loadCategories()/loadBudgetAlertState() every normal
+     launch already uses to hydrate memory. No parallel save/load
+     logic is introduced anywhere in this section.
+
+     Three stacked sheets, same shape as the Manage Categories flow
+     above: Backup & Restore (the hub — two actions), Backup
+     Confirmation, and Restore Confirmation. Neither Download nor
+     Restore ever runs without its confirmation sheet being accepted
+     first.
+
+     VALIDATION follows the same "reject, don't repair" philosophy as
+     isValidExpense()/isValidCategory()/isValidBudgetAlertState():
+     a structurally wrong file (bad JSON, wrong app, missing
+     expenses/categories, or a backupVersion newer than this build
+     understands) is rejected outright and NOTHING is written to
+     LocalStorage — the app's current data is never touched. Once a
+     file passes that structural check, the same per-item filtering
+     loadState()/loadCategories() already do on every launch quietly
+     drops any individually malformed expense/category rather than
+     failing the whole restore over one bad row.
+     ================================================================ */
+
+  // Independent of `appVersion` on purpose (see the metadata this
+  // writes below) — this only needs to change if the *shape* of the
+  // backed-up data itself changes, not on every app release. A
+  // future Pebble could keep reading backupVersion 1 files by
+  // branching on this number, even after its own appVersion has
+  // moved far past "1.7".
+  const BACKUP_FORMAT_VERSION = 1;
+  const BACKUP_APP_NAME = 'Pebble';
+
+  /**
+   * "YYYY-MM-DD_HH-MM" in local time, for the backup filename.
+   * Deliberately not reusing formatDateForInput() (date-only) since
+   * the filename also needs hours/minutes to avoid collisions
+   * between two backups taken the same day.
+   * @param {Date} date
+   * @returns {string}
+   */
+  function formatBackupFilenameTimestamp(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}_${hours}-${minutes}`;
+  }
+
+  /**
+   * Builds the full backup object from live in-memory state —
+   * `expenses`/`budget`/`lastPaymentMethod`/`categories`/
+   * `budgetAlertState` — rather than re-reading LocalStorage,
+   * since every mutation in this app already ends with a
+   * saveState()/saveCategories()/saveBudgetAlertState() call, so
+   * memory and storage are never out of sync at rest.
+   * @returns {object}
+   */
+  function buildBackupPayload() {
+    return {
+      metadata: {
+        app: BACKUP_APP_NAME,
+        appVersion: '1.7',
+        backupVersion: BACKUP_FORMAT_VERSION,
+        backupCreated: new Date().toISOString()
+      },
+      data: {
+        pebbleData: { budget, expenses, lastPaymentMethod },
+        categories,
+        budgetAlerts: budgetAlertState
+      }
+    };
+  }
+
+  /**
+   * Triggers a browser download of a fresh backup via the same
+   * throwaway link + Blob URL technique as downloadExpensesCsv()
+   * (section 20 below) — just JSON instead of CSV.
+   */
+  function downloadBackupFile() {
+    const payload = buildBackupPayload();
+    const jsonContent = JSON.stringify(payload, null, 2);
+    const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Pebble_Backup_${formatBackupFilenameTimestamp(new Date())}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    URL.revokeObjectURL(url);
+  }
+
+  /**
+   * Structural validation for an uploaded backup file — "reject,
+   * don't repair," same as every other LocalStorage-facing validator
+   * in this app. Only `data.pebbleData` (budget + expenses) and
+   * `data.categories` are treated as required sections; a missing or
+   * malformed `data.budgetAlerts` doesn't fail the whole file (see
+   * restoreFromBackupPayload()), since alert-threshold state is
+   * reconstructible and losing it is not data loss the way losing
+   * expenses or categories would be.
+   * @param {*} parsed
+   * @returns {boolean}
+   */
+  function isValidBackupPayload(parsed) {
+    if (!parsed || typeof parsed !== 'object') return false;
+
+    const metadata = parsed.metadata;
+    if (!metadata || typeof metadata !== 'object' || metadata.app !== BACKUP_APP_NAME) return false;
+    if (typeof metadata.backupVersion !== 'number') return false;
+    // A backup written by a future, incompatible Pebble — reject
+    // rather than guessing at a shape this build doesn't understand.
+    if (metadata.backupVersion > BACKUP_FORMAT_VERSION) return false;
+
+    const data = parsed.data;
+    if (!data || typeof data !== 'object') return false;
+
+    const pebbleData = data.pebbleData;
+    const hasValidPebbleData =
+      pebbleData && typeof pebbleData === 'object' &&
+      Number.isFinite(pebbleData.budget) &&
+      Array.isArray(pebbleData.expenses);
+    if (!hasValidPebbleData) return false;
+
+    if (!Array.isArray(data.categories)) return false;
+
+    return true;
+  }
+
+  /**
+   * Restores Pebble's entire state from an already-validated backup
+   * payload. Writes the backup's sections straight into the same
+   * three LocalStorage keys the app already owns, then calls
+   * loadState()/loadCategories()/loadBudgetAlertState() — the exact
+   * functions every normal launch uses to turn LocalStorage into
+   * memory — so this never duplicates a single line of load logic.
+   * Those functions already filter out individually malformed
+   * expenses/categories via isValidExpense()/isValidCategory()
+   * rather than repairing them, exactly as they do on every launch.
+   * @param {object} payload — must have already passed isValidBackupPayload()
+   * @returns {boolean} true if the write to LocalStorage succeeded
+   */
+  function restoreFromBackupPayload(payload) {
+    const { pebbleData, categories: backupCategories, budgetAlerts } = payload.data;
+
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        budget: pebbleData.budget,
+        expenses: pebbleData.expenses,
+        lastPaymentMethod: pebbleData.lastPaymentMethod
+      }));
+      localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(backupCategories));
+    } catch (error) {
+      console.error('Pebble: failed to write restored data to LocalStorage.', error);
+      return false;
+    }
+
+    // The one non-essential section (see isValidBackupPayload()) —
+    // reset to a clean slate first so an invalid/missing section in
+    // the backup can never leave *this session's* pre-restore alert
+    // state lying around afterward.
+    budgetAlertState = { month: null, triggeredThresholds: [] };
+    try {
+      if (isValidBudgetAlertState(budgetAlerts)) {
+        localStorage.setItem(BUDGET_ALERTS_STORAGE_KEY, JSON.stringify(budgetAlerts));
+      } else {
+        localStorage.removeItem(BUDGET_ALERTS_STORAGE_KEY);
+      }
+    } catch (error) {
+      console.error('Pebble: failed to write restored budget alert state.', error);
+    }
+
+    // Reload every in-memory piece from what was just written.
+    loadState();
+    loadCategories();
+    loadBudgetAlertState();
+
+    // Everything on screen reflects the restored data immediately —
+    // no manual refresh, no page reload.
+    renderCategories();
+    refreshUI();
+
+    return true;
+  }
+
+  /* ---------------- Backup & Restore hub sheet ---------------- */
+
+  // Remembers what had focus before the hub sheet opened, so closing
+  // it (via Cancel, the X, Escape, or tap-outside) returns focus
+  // there instead of leaving it stranded on a hidden element.
+  let backupRestoreTriggerEl = null;
+
+  function openBackupRestoreSheet() {
+    backupRestoreTriggerEl = document.activeElement;
+    backupRestoreSheetOverlay.hidden = false;
+    void backupRestoreSheetOverlay.offsetWidth;
+    backupRestoreSheetOverlay.classList.remove('sheet-hidden');
+    backupRestoreCloseBtn.focus();
+  }
+
+  function closeBackupRestoreSheet() {
+    backupRestoreSheetOverlay.classList.add('sheet-hidden');
+    window.setTimeout(() => {
+      backupRestoreSheetOverlay.hidden = true;
+    }, 280);
+    if (backupRestoreTriggerEl instanceof HTMLElement) backupRestoreTriggerEl.focus();
+  }
+
+  if (openBackupRestoreBtn) {
+    openBackupRestoreBtn.addEventListener('click', openBackupRestoreSheet);
+  }
+  backupRestoreCloseBtn.addEventListener('click', closeBackupRestoreSheet);
+  backupRestoreSheetOverlay.addEventListener('click', (event) => {
+    if (event.target === backupRestoreSheetOverlay) {
+      closeBackupRestoreSheet();
+    }
+  });
+
+  /* ---------------- Backup confirmation ---------------- */
+
+  let backupConfirmTriggerEl = null;
+
+  function openBackupConfirmSheet() {
+    backupConfirmTriggerEl = document.activeElement;
+    backupConfirmSheetOverlay.hidden = false;
+    void backupConfirmSheetOverlay.offsetWidth;
+    backupConfirmSheetOverlay.classList.remove('sheet-hidden');
+  }
+
+  function closeBackupConfirmSheet() {
+    backupConfirmSheetOverlay.classList.add('sheet-hidden');
+    window.setTimeout(() => {
+      backupConfirmSheetOverlay.hidden = true;
+    }, 220);
+    if (backupConfirmTriggerEl instanceof HTMLElement) backupConfirmTriggerEl.focus();
+  }
+
+  downloadBackupBtn.addEventListener('click', openBackupConfirmSheet);
+  backupConfirmCancelBtn.addEventListener('click', closeBackupConfirmSheet);
+  backupConfirmSheetOverlay.addEventListener('click', (event) => {
+    if (event.target === backupConfirmSheetOverlay) {
+      closeBackupConfirmSheet();
+    }
+  });
+
+  backupConfirmDownloadBtn.addEventListener('click', () => {
+    downloadBackupFile();
+    closeBackupConfirmSheet();
+    closeBackupRestoreSheet();
+    showToast('success', 'Backup downloaded successfully');
+  });
+
+  /* ---------------- Restore confirmation + file picker ---------------- */
+
+  let restoreConfirmTriggerEl = null;
+
+  function openRestoreConfirmSheet() {
+    restoreConfirmTriggerEl = document.activeElement;
+    restoreConfirmSheetOverlay.hidden = false;
+    void restoreConfirmSheetOverlay.offsetWidth;
+    restoreConfirmSheetOverlay.classList.remove('sheet-hidden');
+  }
+
+  function closeRestoreConfirmSheet() {
+    restoreConfirmSheetOverlay.classList.add('sheet-hidden');
+    window.setTimeout(() => {
+      restoreConfirmSheetOverlay.hidden = true;
+    }, 220);
+    if (restoreConfirmTriggerEl instanceof HTMLElement) restoreConfirmTriggerEl.focus();
+  }
+
+  restoreBackupBtn.addEventListener('click', openRestoreConfirmSheet);
+  restoreConfirmCancelBtn.addEventListener('click', closeRestoreConfirmSheet);
+  restoreConfirmSheetOverlay.addEventListener('click', (event) => {
+    if (event.target === restoreConfirmSheetOverlay) {
+      closeRestoreConfirmSheet();
+    }
+  });
+
+  // Confirming just closes this sheet and opens the OS file picker —
+  // the hub sheet stays open behind it so a failed/cancelled pick
+  // lands the user right back where they can try again.
+  restoreConfirmChooseFileBtn.addEventListener('click', () => {
+    closeRestoreConfirmSheet();
+    restoreFileInput.click();
+  });
+
+  restoreFileInput.addEventListener('change', () => {
+    const file = restoreFileInput.files && restoreFileInput.files[0];
+    // Always clear the input's value, success or failure, so
+    // selecting the exact same file again still fires this event.
+    restoreFileInput.value = '';
+    if (!file) return;
+
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      let parsed;
+      try {
+        parsed = JSON.parse(String(reader.result));
+      } catch (error) {
+        showToast('error', 'This file isn\u2019t a valid Pebble backup.');
+        return;
+      }
+
+      if (!isValidBackupPayload(parsed)) {
+        showToast('error', 'This file isn\u2019t a valid Pebble backup.');
+        return;
+      }
+
+      const restored = restoreFromBackupPayload(parsed);
+      if (!restored) {
+        showToast('error', 'Could not restore this backup.');
+        return;
+      }
+
+      closeBackupRestoreSheet();
+      showToast('success', 'Backup restored successfully');
+    };
+
+    reader.onerror = () => {
+      showToast('error', 'Could not read this file.');
+    };
+
+    reader.readAsText(file);
+  });
+
+  // Escape closes whichever of the three sheets above is currently
+  // open, most-nested first — same "only while actually open" guard
+  // as the Expense Detail sheet's own Escape handler.
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    if (!restoreConfirmSheetOverlay.hidden) {
+      closeRestoreConfirmSheet();
+    } else if (!backupConfirmSheetOverlay.hidden) {
+      closeBackupConfirmSheet();
+    } else if (!backupRestoreSheetOverlay.hidden) {
+      closeBackupRestoreSheet();
+    }
+  });
+
+
+  /* ================================================================
      20. CSV EXPORT (PHASE 10 + PHASE 11)
      Exports the full `expenses` array (not the currently filtered
      view — Export Data is about the whole history) as a CSV file,
@@ -4352,6 +4729,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const TOAST_VISIBLE_MS = 900;
   const TOAST_FADE_MS = 180;
 
+  // Budget Alert Timing
+  const BUDGET_ALERT_VISIBLE_MS = 4000;
+  const BUDGET_ALERT_FADE_MS = 300;
+
   /**
    * Shows a centered, auto-dismissing toast. Generic by design: any
    * feature that just needs a brief "X happened" confirmation calls
@@ -4359,7 +4740,7 @@ document.addEventListener('DOMContentLoaded', () => {
    * @param {keyof TOAST_ICONS} icon
    * @param {string} message
    */
-  function showToast(icon, message) {
+  function showToast(icon, message, visibleMs = TOAST_VISIBLE_MS, fadeMs = TOAST_FADE_MS) {
     if (!toastEl) return;
 
     // Cancel any in-flight show/hide from a previous call so toasts
@@ -4388,9 +4769,267 @@ document.addEventListener('DOMContentLoaded', () => {
       toastHideTimeoutId = window.setTimeout(() => {
         toastEl.hidden = true;
         toastEl.classList.remove('toast-hiding');
-      }, TOAST_FADE_MS);
-    }, TOAST_VISIBLE_MS);
+      }, fadeMs);
+    }, visibleMs);
   }
+
+  /* ================================================================
+     21.5 BUDGET ALERTS (v1.6 Phase A — Intelligent Budget Alerts)
+     One reusable entry point — evaluateBudgetAlerts() — that every
+     expense mutation (add, edit, delete) calls after saveState().
+     Nothing else in the file touches budget-alert state; the checks
+     are intentionally NOT scattered into updateDashboard(),
+     refreshUI(), or the budget sheet itself, so "when spending
+     changes" stays exactly Add/Edit/Delete Expense as specified.
+
+     State is "which thresholds have already fired this month," not
+     "which months have been alerted" — thresholds are independently
+     re-armed the moment spending drops back below them (see the
+     reset step in evaluateBudgetAlerts()), and the whole state
+     starts over the moment the tracked month no longer matches the
+     real calendar month. Persisted separately from `pebble-data`,
+     the same pattern categories use for their own storage key.
+
+     Toasts reuse showToast() (section 21) as-is — no new icon type,
+     no new component. 50% maps to the existing green 'success'
+     circle, 75/90/100 to the existing red 'error' circle, and a
+     small queue (below) makes sure several thresholds crossed in a
+     single mutation still show one at a time instead of clobbering
+     each other via showToast()'s own single-toast timers.
+     ================================================================ */
+
+  const BUDGET_ALERTS_STORAGE_KEY = 'pebble-budget-alerts';
+
+  // Ascending — evaluateBudgetAlerts() relies on this order so that
+  // when several thresholds are crossed in one jump (e.g. a single
+  // edit takes spending from 40% to 95%), they queue lowest-first.
+  const BUDGET_ALERT_THRESHOLDS = [50, 75, 90, 100];
+
+  // Reuses showToast()'s two existing icon keys by severity — no
+  // third icon is introduced for this feature.
+  const BUDGET_ALERT_ICONS = { 50: 'success', 75: 'error', 90: 'error', 100: 'error' };
+
+  // In-memory alert state for the month currently being tracked.
+  // `month` is a "YYYY-M" key (see getBudgetAlertMonthKey()) and
+  // `triggeredThresholds` is the subset of BUDGET_ALERT_THRESHOLDS
+  // already shown for that month. Loaded from LocalStorage once
+  // below (loadBudgetAlertState()); every other read/write goes
+  // through evaluateBudgetAlerts().
+  let budgetAlertState = {
+    month: null,
+    triggeredThresholds: []
+  };
+
+  /**
+   * "YYYY-M" key for a date's calendar month — the one definition
+   * of "current month" for alert-state purposes, deliberately the
+   * same definition getCurrentMonthExpenses() uses for spending, so
+   * the two can never disagree about which month is "now."
+   * @param {Date} date
+   * @returns {string}
+   */
+  function getBudgetAlertMonthKey(date) {
+    return `${date.getFullYear()}-${date.getMonth()}`;
+  }
+
+  /**
+   * Schema check for state loaded from LocalStorage — same
+   * "reject, don't repair" philosophy as isValidExpense()/
+   * isValidCategory(). Anything malformed is discarded in favor of
+   * the safe in-memory default (an empty, unstarted month), never
+   * patched into something that merely looks valid.
+   * @param {*} state
+   * @returns {boolean}
+   */
+  function isValidBudgetAlertState(state) {
+    return Boolean(
+      state &&
+      typeof state === 'object' &&
+      typeof state.month === 'string' &&
+      Array.isArray(state.triggeredThresholds) &&
+      state.triggeredThresholds.every((threshold) => BUDGET_ALERT_THRESHOLDS.includes(threshold))
+    );
+  }
+
+  function loadBudgetAlertState() {
+    let raw;
+    try {
+      raw = localStorage.getItem(BUDGET_ALERTS_STORAGE_KEY);
+    } catch (error) {
+      console.error('Pebble: LocalStorage is unavailable for budget alerts.', error);
+      return;
+    }
+
+    if (!raw) return; // Nothing saved yet — keep the empty default.
+
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (error) {
+      console.error('Pebble: saved budget alert state is corrupted, resetting.', error);
+      try {
+        localStorage.removeItem(BUDGET_ALERTS_STORAGE_KEY);
+      } catch (removeError) {
+        console.error('Pebble: failed to clear saved budget alert state.', removeError);
+      }
+      return;
+    }
+
+    if (isValidBudgetAlertState(parsed)) {
+      budgetAlertState = parsed;
+    }
+  }
+
+  function saveBudgetAlertState() {
+    try {
+      localStorage.setItem(BUDGET_ALERTS_STORAGE_KEY, JSON.stringify(budgetAlertState));
+    } catch (error) {
+      console.error('Pebble: failed to save budget alert state.', error);
+    }
+  }
+
+  /**
+   * This month's total spend and budget-usage percentage. Reuses
+   * getCurrentMonthExpenses() (section 12) so "current month" is
+   * defined in exactly one place across the whole app. Deliberately
+   * NOT clamped to 100 — unlike calculateDashboardData()'s
+   * display-only spendingPercentage — because the 100% alert needs
+   * to know precisely how far over budget spending has gone.
+   * @returns {{ totalSpent: number, percentage: number }}
+   */
+  function calculateBudgetAlertProgress() {
+    const monthExpenses = getCurrentMonthExpenses(expenses);
+    const totalSpent = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+    const percentage = budget > 0 ? (totalSpent / budget) * 100 : 0;
+    return { totalSpent, percentage };
+  }
+
+  /**
+   * The exact copy for one threshold's toast, using live
+   * totalSpent/budget figures. The 100% case is the only one with a
+   * dynamic second line (how much over budget, not just the split).
+   * @param {number} threshold
+   * @param {number} totalSpent
+   * @returns {string}
+   */
+  function buildBudgetAlertMessage(threshold, totalSpent) {
+    const spentStr = currencyFormatter.format(totalSpent);
+    const budgetStr = currencyFormatter.format(budget);
+
+    switch (threshold) {
+      case 50:
+        return `💰 Half of your monthly budget has been used.\n${spentStr} of ${budgetStr} spent.`;
+      case 75:
+        return `⚠️ 75% of your monthly budget has been used.\n${spentStr} of ${budgetStr} spent.`;
+      case 90:
+        return `🚨 Only 10% of your monthly budget remains.\n${spentStr} of ${budgetStr} spent.`;
+      case 100: {
+        const exceededStr = currencyFormatter.format(Math.max(totalSpent - budget, 0));
+        return `🚨 Budget exceeded.\nYou have exceeded your monthly budget by ${exceededStr}.`;
+      }
+      default:
+        return '';
+    }
+  }
+
+  // Small FIFO so several thresholds crossed in one mutation still
+  // show one at a time — showToast() itself only ever knows about
+  // "the current toast," so stacking calls to it back-to-back would
+  // just cancel everything but the last one.
+  let budgetAlertQueue = [];
+  let budgetAlertQueueTimerId = null;
+
+  function runNextBudgetAlertToast() {
+    const next = budgetAlertQueue.shift();
+    if (!next) {
+      budgetAlertQueueTimerId = null;
+      return;
+    }
+    showToast(next.icon, next.message, BUDGET_ALERT_VISIBLE_MS, BUDGET_ALERT_FADE_MS);
+    budgetAlertQueueTimerId = window.setTimeout(() => {
+      runNextBudgetAlertToast();
+    }, BUDGET_ALERT_VISIBLE_MS + BUDGET_ALERT_FADE_MS);
+  }
+
+  /**
+   * Queues one or more budget-alert toasts. `delayFirst` lets the
+   * Add/Edit call site wait until the existing "Expense Saved" /
+   * "Expense Updated" toast has fully finished before the first
+   * budget toast appears, instead of the two fighting over the same
+   * showToast() timers; the Delete call site (no competing toast)
+   * doesn't need it.
+   * @param {Array<{icon:string, message:string}>} toasts
+   * @param {boolean} delayFirst
+   */
+  function queueBudgetAlertToasts(toasts, delayFirst) {
+    if (toasts.length === 0) return;
+    budgetAlertQueue.push(...toasts);
+
+    if (budgetAlertQueueTimerId !== null) return; // already draining
+
+    if (delayFirst) {
+      budgetAlertQueueTimerId = window.setTimeout(() => {
+        runNextBudgetAlertToast();
+      }, TOAST_VISIBLE_MS + TOAST_FADE_MS);
+    } else {
+      runNextBudgetAlertToast();
+    }
+  }
+
+  /**
+   * THE single entry point for budget alerts. Called after
+   * saveState() from every expense mutation — Add, Edit, Delete —
+   * and nowhere else.
+   *
+   * Algorithm per the v1.6 spec:
+   *  1. If the tracked month isn't the real current month anymore,
+   *     start completely fresh (new month = clean slate).
+   *  2. Recompute this month's spend percentage from scratch — never
+   *     incremented, same philosophy as calculateDashboardData().
+   *  3. Re-arm (un-trigger) any threshold currently ABOVE that
+   *     percentage, so deleting/editing expenses back down makes it
+   *     eligible to fire again later. Thresholds at or below the
+   *     percentage stay completed.
+   *  4. Whatever is now at-or-under the percentage but not yet
+   *     triggered is newly crossed — mark it triggered, persist, and
+   *     queue its toast (ascending, so 50 always shows before 75/90/
+   *     100 when several are crossed in the same mutation).
+   * @param {{ delayFirstToast?: boolean }} [options]
+   */
+  function evaluateBudgetAlerts(options = {}) {
+    const monthKey = getBudgetAlertMonthKey(new Date());
+
+    if (budgetAlertState.month !== monthKey) {
+      budgetAlertState = { month: monthKey, triggeredThresholds: [] };
+    }
+
+    const { totalSpent, percentage } = calculateBudgetAlertProgress();
+
+    // Step 3 — reset thresholds spending no longer supports.
+    budgetAlertState.triggeredThresholds = budgetAlertState.triggeredThresholds
+      .filter((threshold) => percentage >= threshold);
+
+    // Step 4 — whatever's freshly met and not already completed.
+    const newlyCrossed = BUDGET_ALERT_THRESHOLDS.filter((threshold) =>
+      percentage >= threshold && !budgetAlertState.triggeredThresholds.includes(threshold)
+    );
+
+    if (newlyCrossed.length === 0) {
+      saveBudgetAlertState();
+      return;
+    }
+
+    newlyCrossed.forEach((threshold) => budgetAlertState.triggeredThresholds.push(threshold));
+    saveBudgetAlertState();
+
+    const toasts = newlyCrossed.map((threshold) => ({
+      icon: BUDGET_ALERT_ICONS[threshold],
+      message: buildBudgetAlertMessage(threshold, totalSpent)
+    }));
+    queueBudgetAlertToasts(toasts, options.delayFirstToast === true);
+  }
+
+  loadBudgetAlertState();
 
 
   /* ================================================================

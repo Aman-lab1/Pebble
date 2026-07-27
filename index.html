@@ -566,6 +566,98 @@
   </div>
 
   <!-- ============================================================
+       BACKUP & RESTORE SHEET (v1.7)
+       Opens from the "Backup & Restore" row in Settings. Reuses the
+       plain .bottom-sheet shell (not the taller .expense-detail-sheet
+       one Manage Categories uses — two compact action cards don't
+       need a scrollable 58vh shell), plus the same close-button +
+       drag-handle look via .expense-detail-close-btn/.sheet-drag-
+       handle. Each action is its own .card, same token as every
+       other card in the app — nothing new visually, just Backup
+       Data and Restore Data stacked instead of side by side.
+       ============================================================ -->
+  <div id="backup-restore-sheet-overlay" class="sheet-overlay expense-detail-overlay sheet-hidden" hidden>
+    <section
+      id="backup-restore-sheet"
+      class="bottom-sheet"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="backup-restore-sheet-title"
+    >
+      <button type="button" id="backup-restore-close-btn" class="expense-detail-close-btn" aria-label="Close">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+
+      <div class="sheet-drag-handle" aria-hidden="true"></div>
+
+      <h2 id="backup-restore-sheet-title" class="bottom-sheet-title">Backup &amp; Restore</h2>
+
+      <div class="card backup-restore-action">
+        <p class="card-label">Backup Data</p>
+        <p class="settings-section-description">Download a complete backup of your Pebble data.</p>
+        <button type="button" id="download-backup-btn" class="save-btn" aria-label="Download Backup">Download Backup</button>
+      </div>
+
+      <div class="card backup-restore-action">
+        <p class="card-label">Restore Data</p>
+        <p class="settings-section-description">Restore Pebble from a previously downloaded backup.</p>
+        <button type="button" id="restore-backup-btn" class="delete-btn" aria-label="Restore Backup">Restore Backup</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============================================================
+       BACKUP CONFIRMATION SHEET (v1.7)
+       Opens on top of the Backup & Restore sheet when "Download
+       Backup" is tapped. Same confirmation-sheet shape as Delete
+       Category above — title, description, Cancel + confirm.
+       ============================================================ -->
+  <div id="backup-confirm-sheet-overlay" class="sheet-overlay add-category-overlay sheet-hidden" hidden>
+    <section
+      id="backup-confirm-sheet"
+      class="bottom-sheet"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="backup-confirm-sheet-title"
+    >
+      <h2 id="backup-confirm-sheet-title" class="bottom-sheet-title">Download Backup?</h2>
+      <p class="settings-section-description">This will download a complete backup of your Pebble data including expenses, categories, monthly budget and settings.</p>
+      <div class="bottom-sheet-actions">
+        <button type="button" id="backup-confirm-cancel-btn" class="cancel-btn" aria-label="Cancel">Cancel</button>
+        <button type="button" id="backup-confirm-download-btn" class="save-btn" aria-label="Download Backup">Download Backup</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============================================================
+       RESTORE CONFIRMATION SHEET (v1.7)
+       Opens on top of the Backup & Restore sheet when "Restore
+       Backup" is tapped. Confirming opens the OS file picker
+       (#restore-file-input below) — restoring itself never happens
+       until a chosen file has also passed validation in script.js.
+       ============================================================ -->
+  <div id="restore-confirm-sheet-overlay" class="sheet-overlay add-category-overlay sheet-hidden" hidden>
+    <section
+      id="restore-confirm-sheet"
+      class="bottom-sheet"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="restore-confirm-sheet-title"
+    >
+      <h2 id="restore-confirm-sheet-title" class="bottom-sheet-title">Restore Backup?</h2>
+      <p class="settings-section-description">Restoring will replace your current Pebble data with the contents of the selected backup file.</p>
+      <div class="bottom-sheet-actions">
+        <button type="button" id="restore-confirm-cancel-btn" class="cancel-btn" aria-label="Cancel">Cancel</button>
+        <button type="button" id="restore-confirm-choose-file-btn" class="delete-btn" aria-label="Choose Backup File">Choose Backup File</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- Hidden native file picker triggered by "Choose Backup File"
+       above — never shown itself, just programmatically clicked. -->
+  <input type="file" id="restore-file-input" accept=".json,application/json" hidden aria-hidden="true">
+
+  <!-- ============================================================
        SETTINGS PANEL (right-side slide-over)
        Hidden by default. Opens when the Settings icon in the Home
        header is tapped. JavaScript controls visibility, the
@@ -621,6 +713,28 @@
             aria-controls="manage-categories-sheet"
           >
             <span>Manage Categories</span>
+            <svg class="settings-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
+        </section>
+
+        <!-- ==================== BACKUP & RESTORE (v1.7) ====================
+             Same navigation-row pattern as Manage Categories above —
+             opens the Backup & Restore bottom sheet (see
+             #backup-restore-sheet-overlay near the other sheets
+             further down), not a new page or panel. -->
+        <section class="settings-section">
+          <button
+            type="button"
+            id="open-backup-restore-btn"
+            class="settings-section-toggle"
+            aria-label="Backup & Restore"
+            aria-haspopup="dialog"
+            aria-controls="backup-restore-sheet"
+          >
+            <span class="settings-section-label">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+              Backup &amp; Restore
+            </span>
             <svg class="settings-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
           </button>
         </section>
