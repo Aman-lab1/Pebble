@@ -1701,10 +1701,19 @@ document.addEventListener('DOMContentLoaded', () => {
      * suppressed as too small, so both must clear together.
      * @param {number} totalSpent
      * @param {number} previousTotalSpent
+     * @param {boolean} isCurrentMonth
+     * @param {number} todayDayOfMonth
      * @returns {{icon:string, message:string}|null}
      */
-    function calculateSpendingComparisonInsight(totalSpent, previousTotalSpent) {
+    function calculateSpendingComparisonInsight(totalSpent, previousTotalSpent, isCurrentMonth, todayDayOfMonth) {
       if (previousTotalSpent <= 0) return null;
+
+      // Skip entirely for the current, still-in-progress month until it's
+      // far enough along (15th+) that comparing it to a FULL previous
+      // month isn't misleading (e.g. "97% less" on Aug 1st just because
+      // August has barely started).
+      const EARLY_MONTH_CUTOFF_DAY = 15;
+      if (isCurrentMonth && todayDayOfMonth < EARLY_MONTH_CUTOFF_DAY) return null;
 
       const percentChange = ((totalSpent - previousTotalSpent) / previousTotalSpent) * 100;
       const absoluteChange = Math.abs(totalSpent - previousTotalSpent);
@@ -1819,7 +1828,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const insightCandidates = [
         () => calculateBudgetExceededInsight(totalSpent, budgetAmount),
         () => calculateBudgetSavedInsight(totalSpent, budgetAmount, isCurrentMonth, todayDayOfMonth),
-        () => calculateSpendingComparisonInsight(totalSpent, previousTotalSpent),
+        () => calculateSpendingComparisonInsight(totalSpent, previousTotalSpent, isCurrentMonth, todayDayOfMonth),
         () => calculateLargestCategoryInsight(categoryBreakdown),
         () => calculatePaymentHabitInsight(paymentData),
         () => calculateSpendingActivityInsight(statsData, totalSpent)
