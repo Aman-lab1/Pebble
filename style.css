@@ -1796,6 +1796,128 @@ input:focus-visible,
   opacity: 0.5;
 }
 
+/* ==============================================================
+   SPENDING CALENDAR (Analytics)
+   No month controls of its own (v1.8 Phase B) — it reads the same
+   analyticsSelectedMonth the main Analytics month nav above drives,
+   so there's nothing here to align with a second header, only the
+   weekday row against the day grid below it.
+   ============================================================== */
+
+/* Weekday row and day grid share the exact same column math —
+   repeat(7, 1fr) AND the same gap — so column N's center in one
+   lands exactly on column N's center in the other. A grid with a
+   gap and one without don't divide their width the same way even
+   at identical column counts, which is what drifted the header out
+   of alignment with the cells; matching the gap here is the fix. */
+.spending-calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--space-1);
+  text-align: center;
+  font-size: var(--font-size-small);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-2);
+  font-weight: var(--font-weight-medium);
+}
+
+.spending-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--space-1);
+}
+
+.spending-calendar-cell {
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  padding: var(--space-1) 2px;
+  min-height: 48px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.spending-calendar-cell-empty {
+  background-color: transparent;
+  border-color: transparent;
+}
+
+.spending-calendar-day-num {
+  font-size: var(--font-size-body);
+  color: var(--color-text-primary);
+  line-height: 1.2;
+}
+
+.spending-calendar-cell:not(.has-spending) .spending-calendar-day-num {
+  color: var(--color-text-secondary);
+}
+
+.spending-calendar-amount {
+  font-size: 10px; /* Smallest readable size on mobile */
+  color: var(--color-text-secondary);
+  margin-top: 2px;
+  word-break: break-all;
+  line-height: 1.1;
+  text-align: center;
+}
+
+/* -- Spending Intensity (TASK 3, Phase B) --
+   Four subtle steps, relative to the selected month's own busiest
+   day (computed in script.js), not a fixed rupee scale. Built the
+   same way the Spending Trend chart already tints its fill —
+   --color-text-primary (white, on Pebble's black/near-black
+   surfaces) with an alpha suffix — rather than introducing a new
+   accent color the rest of the app doesn't otherwise use. Each step
+   up is a modest, even increase in opacity so the calendar reads as
+   "a bit more, a bit more" rather than a jump; the border gets the
+   same light-touch treatment so the cell doesn't rely on fill alone
+   to register at low intensity. Text stays the untinted
+   --color-text-primary/--color-text-secondary pair used everywhere
+   else, so contrast never degrades as intensity rises. */
+.spending-calendar-cell.spending-intensity-1 {
+  background-color: color-mix(in srgb, var(--color-text-primary) 8%, var(--color-bg));
+  border-color: color-mix(in srgb, var(--color-text-primary) 14%, var(--color-border));
+}
+
+.spending-calendar-cell.spending-intensity-2 {
+  background-color: color-mix(in srgb, var(--color-text-primary) 15%, var(--color-bg));
+  border-color: color-mix(in srgb, var(--color-text-primary) 22%, var(--color-border));
+}
+
+.spending-calendar-cell.spending-intensity-3 {
+  background-color: color-mix(in srgb, var(--color-text-primary) 22%, var(--color-bg));
+  border-color: color-mix(in srgb, var(--color-text-primary) 30%, var(--color-border));
+}
+
+.spending-calendar-cell.spending-intensity-4 {
+  background-color: color-mix(in srgb, var(--color-text-primary) 30%, var(--color-bg));
+  border-color: color-mix(in srgb, var(--color-text-primary) 38%, var(--color-border));
+}
+
+@media (min-width: 768px) {
+  .spending-calendar-grid {
+    gap: var(--space-2);
+  }
+  .spending-calendar-weekdays {
+    gap: var(--space-2);
+  }
+  .spending-calendar-cell {
+    padding: var(--space-2) var(--space-1);
+    min-height: 64px;
+  }
+  .spending-calendar-day-num {
+    font-size: var(--font-size-section-title);
+  }
+  .spending-calendar-amount {
+    font-size: var(--font-size-small);
+    margin-top: var(--space-1);
+  }
+}
+
 
 /* ================================================================
    23. EXPENSE DETAIL SHEET (v1.4.0 — TASK 10)

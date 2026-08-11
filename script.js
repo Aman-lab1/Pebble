@@ -809,18 +809,23 @@ document.addEventListener('DOMContentLoaded', () => {
      * change itself already happened by the time this runs.
      */
     function renderAnalyticsMonthLabel() {
-      if (!monthNavLabelEl) return;
-
       const labelDate = new Date(
         analyticsSelectedMonth.year,
         analyticsSelectedMonth.month,
         1
       );
+      
+      const formatted = analyticsMonthFormatter.format(labelDate);
 
-      monthNavLabelEl.classList.add('analytics-month-label-transitioning');
+      if (monthNavLabelEl) {
+        monthNavLabelEl.classList.add('analytics-month-label-transitioning');
+      }
+
       window.setTimeout(() => {
-        monthNavLabelEl.textContent = analyticsMonthFormatter.format(labelDate);
-        monthNavLabelEl.classList.remove('analytics-month-label-transitioning');
+        if (monthNavLabelEl) {
+          monthNavLabelEl.textContent = formatted;
+          monthNavLabelEl.classList.remove('analytics-month-label-transitioning');
+        }
       }, MONTH_LABEL_TRANSITION_MS);
     }
 
@@ -849,8 +854,10 @@ document.addEventListener('DOMContentLoaded', () => {
      * no separate "is this allowed" check needed at the call site.
      */
     function updateAnalyticsMonthNavButtons() {
-      if (!monthNavNextBtn) return;
-      monthNavNextBtn.disabled = isAnalyticsSelectedMonthCurrent();
+      const isCurrent = isAnalyticsSelectedMonthCurrent();
+      if (monthNavNextBtn) {
+        monthNavNextBtn.disabled = isCurrent;
+      }
     }
 
     /**
@@ -885,6 +892,7 @@ document.addEventListener('DOMContentLoaded', () => {
       updateAnalyticsMonthNavButtons();
       updateAnalyticsSummary();
       updateAnalyticsTrend();
+      updateSpendingCalendar();
       updateCategoryBreakdown();
       updatePaymentBreakdown();
       updateAnalyticsStatistics();
@@ -908,7 +916,8 @@ document.addEventListener('DOMContentLoaded', () => {
         analyticsSelectedMonth.month,
         1
       );
-      monthNavLabelEl.textContent = analyticsMonthFormatter.format(initialDate);
+      const formatted = analyticsMonthFormatter.format(initialDate);
+      monthNavLabelEl.textContent = formatted;
     }
     updateAnalyticsMonthNavButtons();
 
@@ -1143,6 +1152,138 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initial paint, same as the summary cards above.
     updateAnalyticsTrend();
+
+    /* ==============================================================
+       1.35 SPENDING CALENDAR (v1.8 PHASE B)
+       Read-only monthly calendar for analyticsSelectedMonth.
+       Reuses getAnalyticsMonthExpenses() for filtering, and 
+       currencyFormatter for amounts. No month controls of its own —
+       see 1.1 above, stepAnalyticsMonth() is the single place that
+       drives every Analytics section including this one.
+       ============================================================== */
+
+    const spendingCalendarGridEl = document.getElementById('spending-calendar-grid');
+
+    // Number of visual intensity steps a spending day can land in.
+    // Kept small on purpose — Pebble's "subtle, not a heatmap" rule
+    // (see style.css) means the eye only needs to tell "a little",
+    // "some", "a lot" apart, not ten shades of it.
+    const SPENDING_INTENSITY_LEVELS = 4;
+
+    /**
+     * Calculates the total spending for each day of the selected
+     * month, plus a 1-4 relative intensity level for every day that
+     * has spending. The level is derived from that day's total as a
+     * fraction of the selected month's own highest single-day total
+     * — never from a fixed rupee threshold — so a ₹50 day can read
+     * as "high" in a quiet month and a ₹5,000 day can read as
+     * "medium" in a heavy one. Math.ceil() guarantees any nonzero
+     * spending gets at least level 1 (never rounds a real expense
+     * down to "no spending"), and the day that IS the month's max
+     * always lands exactly on the top level.
+     * @param {Array} expenseList 
+     * @param {{year:number, month:number}} selectedMonth 
+     * @returns {Map<number, {total: number, level: number}>} Map of
+     *   day (1-31) to that day's total and its 1-4 intensity level.
+     */
+    function calculateSpendingCalendar(expenseList, selectedMonth) {
+      const monthExpenses = getAnalyticsMonthExpenses(expenseList, selectedMonth);
+      const dailyTotals = new Map();
+      
+      monthExpenses.forEach((expense) => {
+        const date = new Date(expense.createdAt);
+        const day = date.getDate();
+        const current = dailyTotals.get(day) || 0;
+        dailyTotals.set(day, current + expense.amount);
+      });
+
+      // Relative to THIS month only — a fresh max on every call, so
+      // switching months automatically rescales the whole calendar.
+      let maxDailyTotal = 0;
+      dailyTotals.forEach((total) => {
+        if (total > maxDailyTotal) maxDailyTotal = total;
+      });
+
+      const dailyData = new Map();
+      dailyTotals.forEach((total, day) => {
+        const level = maxDailyTotal > 0
+          ? Math.min(SPENDING_INTENSITY_LEVELS, Math.ceil((total / maxDailyTotal) * SPENDING_INTENSITY_LEVELS))
+          : 0;
+        dailyData.set(day, { total, level });
+      });
+      
+      return dailyData;
+    }
+
+    /**
+     * Renders the 7-column calendar grid for the selected month,
+     * including empty padding cells for the start of the month.
+     * @param {Map<number, {total: number, level: number}>} dailyData 
+     */
+    function renderSpendingCalendar(dailyData) {
+      if (!spendingCalendarGridEl) return;
+      spendingCalendarGridEl.innerHTML = '';
+      
+      const { year, month } = analyticsSelectedMonth;
+      
+      // Determine what day of the week the 1st falls on
+      // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+      const firstDayDate = new Date(year, month, 1);
+      const startDayOfWeek = firstDayDate.getDay();
+      
+      // We want Monday to be the first column (index 0)
+      const adjustedStartDay = (startDayOfWeek + 6) % 7;
+      
+      // Total days in the month
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      
+      const fragment = document.createDocumentFragment();
+      
+      // Empty cells before the 1st
+      for (let i = 0; i < adjustedStartDay; i++) {
+        const emptyCell = document.createElement('div');
+        emptyCell.className = 'spending-calendar-cell spending-calendar-cell-empty';
+        fragment.appendChild(emptyCell);
+      }
+      
+      // Day cells
+      for (let day = 1; day <= daysInMonth; day++) {
+        const cell = document.createElement('div');
+        cell.className = 'spending-calendar-cell';
+        
+        const dayNum = document.createElement('div');
+        dayNum.className = 'spending-calendar-day-num';
+        dayNum.textContent = day;
+        cell.appendChild(dayNum);
+        
+        const dayData = dailyData.get(day);
+        if (dayData && dayData.total > 0) {
+          cell.classList.add('has-spending');
+          cell.classList.add(`spending-intensity-${dayData.level}`);
+          const amount = document.createElement('div');
+          amount.className = 'spending-calendar-amount';
+          amount.textContent = currencyFormatter.format(dayData.total);
+          cell.appendChild(amount);
+        }
+        
+        fragment.appendChild(cell);
+      }
+      
+      spendingCalendarGridEl.appendChild(fragment);
+    }
+
+    /**
+     * Recomputes and repaints the Spending Calendar for whatever
+     * month `analyticsSelectedMonth` currently points to.
+     */
+    function updateSpendingCalendar() {
+      if (!spendingCalendarGridEl) return;
+      const dailyTotals = calculateSpendingCalendar(expenses, analyticsSelectedMonth);
+      renderSpendingCalendar(dailyTotals);
+    }
+
+    // Initial paint
+    updateSpendingCalendar();
 
     /* ==============================================================
        1.4 CATEGORY BREAKDOWN (TASK 5 — Analytics: Category Breakdown)

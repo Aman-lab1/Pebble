@@ -108,6 +108,31 @@
       </div>
     </section>
 
+    <!-- ==================== SPENDING CALENDAR ====================
+         v1.8 PHASE B. Read-only monthly calendar for
+         analyticsSelectedMonth (script.js, calculateSpendingCalendar()/
+         renderSpendingCalendar()). No month controls of its own — it
+         reads the exact same analyticsSelectedMonth state as the main
+         Analytics month navigation above and repaints via
+         stepAnalyticsMonth(), the single source of truth for which
+         month is selected. Weekday header is static markup
+         (Monday-first, matching the project's date conventions); the
+         day grid itself is injected by script.js. Cells with spending
+         carry a relative intensity level (script.js,
+         calculateSpendingCalendar()) — no tap-to-open, that's a later
+         phase. -->
+    <section id="analytics-calendar-card" class="card" aria-label="Spending Calendar">
+      <p class="card-label">Spending Calendar</p>
+
+      <div class="spending-calendar-weekdays" aria-hidden="true">
+        <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+      </div>
+
+      <div id="spending-calendar-grid" class="spending-calendar-grid" role="grid" aria-label="Daily spending">
+        <!-- Day cells injected by script.js -->
+      </div>
+    </section>
+
     <!-- ==================== CATEGORY BREAKDOWN ====================
          TASK 5. Ranked list (highest spend first) for
          analyticsSelectedMonth (script.js, calculateCategoryBreakdown()
