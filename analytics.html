@@ -265,5 +265,40 @@
 
   </main>
 
+  <!-- ============================================================
+       DAY DETAIL BOTTOM SHEET (v1.8 PHASE C)
+       Opens when a spending day in the Spending Calendar above is
+       tapped. Read-only — reuses the exact same .sheet-overlay /
+       .bottom-sheet / .expense-detail-sheet / .expense-detail-
+       close-btn / .sheet-drag-handle / .bottom-sheet-title /
+       .expense-detail-amount shell as index.html's Expense Detail
+       and Manage Categories sheets (see style.css section 23), and
+       .expense-item/.expense-category-icon/.expense-details/
+       .expense-category-name/.expense-note/.expense-amount for each
+       row — no new sheet architecture, no Edit/Delete/Save actions.
+       ============================================================ -->
+  <div id="day-detail-sheet-overlay" class="sheet-overlay expense-detail-overlay sheet-hidden" hidden>
+    <section
+      id="day-detail-sheet"
+      class="bottom-sheet expense-detail-sheet"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="day-detail-date"
+    >
+      <button type="button" id="day-detail-close-btn" class="expense-detail-close-btn" aria-label="Close">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+
+      <div class="sheet-drag-handle" aria-hidden="true"></div>
+
+      <h2 id="day-detail-date" class="bottom-sheet-title"></h2>
+      <p id="day-detail-total" class="expense-detail-amount"></p>
+
+      <ul id="day-detail-list" class="expense-list day-detail-list">
+        <!-- Read-only expense rows injected by script.js -->
+      </ul>
+    </section>
+  </div>
+
 </body>
 </html>

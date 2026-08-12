@@ -1862,6 +1862,30 @@ input:focus-visible,
   box-shadow: none;
 }
 
+/* -- Interactive spending days (v1.8 Phase C) --
+   Spending days render as a native <button> (see script.js) so they
+   stay reachable and operable via keyboard/assistive tech; this is
+   purely a button reset so it's pixel-identical to the plain <div>
+   cell it replaces — every visual rule above still applies via the
+   shared .spending-calendar-cell class. Non-spending days stay
+   non-interactive <div>s and are untouched by this rule. */
+button.spending-calendar-cell {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button.spending-calendar-cell:focus-visible {
+  outline: 2px solid var(--color-text-secondary);
+  outline-offset: 2px;
+}
+
 .spending-calendar-day-num {
   font-size: var(--font-size-body);
   font-weight: var(--font-weight-medium);
@@ -2142,6 +2166,32 @@ input:focus-visible,
 .expense-detail-actions {
   width: 100%;
   margin-top: auto;
+}
+
+/* -- Day Detail Sheet (v1.8 Phase C) --
+   Read-only day-expense list, opened by tapping a spending day in
+   the Spending Calendar (Phase B, frozen — untouched). Reuses the
+   .expense-detail-sheet shell above plus .expense-item and its
+   children as-is; the only thing those don't already account for is
+   the .bottom-sheet's own text-align: center, which every other
+   scrollable-list sheet (.manage-categories-list) already overrides
+   the same way. Hover/active feedback is muted here since these
+   rows aren't tappable, unlike the identical-looking cards on the
+   Home screen. -- */
+.day-detail-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  text-align: left;
+}
+
+.day-detail-list .expense-item:hover {
+  background-color: var(--color-card);
+}
+
+.day-detail-list .expense-item:active {
+  transform: none;
 }
 
 .delete-btn {

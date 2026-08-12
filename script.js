@@ -1260,16 +1260,26 @@ document.addEventListener('DOMContentLoaded', () => {
       
       // Day cells
       for (let day = 1; day <= daysInMonth; day++) {
-        const cell = document.createElement('div');
+        const dayData = dailyData.get(day);
+        const hasSpending = Boolean(dayData && dayData.total > 0);
+
+        // v1.8 Phase C: only spending days become operable — a real
+        // <button>, so they're reachable via keyboard/assistive tech,
+        // not a div with a click listener bolted on. Zero-spending
+        // days stay exactly what Phase B already renders. Every
+        // existing class/child below is unchanged either way.
+        const cell = document.createElement(hasSpending ? 'button' : 'div');
         cell.className = 'spending-calendar-cell';
+        if (hasSpending) {
+          cell.type = 'button';
+        }
         
         const dayNum = document.createElement('div');
         dayNum.className = 'spending-calendar-day-num';
         dayNum.textContent = day;
         cell.appendChild(dayNum);
         
-        const dayData = dailyData.get(day);
-        if (dayData && dayData.total > 0) {
+        if (hasSpending) {
           const levelName = INTENSITY_LEVEL_NAMES[dayData.level] || 'low';
           cell.classList.add('has-spending');
           cell.classList.add(`spending-intensity-${levelName}`);
@@ -1277,15 +1287,19 @@ document.addEventListener('DOMContentLoaded', () => {
           // Phase B communicates date + intensity only (no in-cell
           // amount text — that's what caused the wrapping the redesign
           // fixes). The exact figure still reaches assistive tech via
-          // aria-label; Phase C will surface it visually on tap.
+          // aria-label; Phase C surfaces it visually on tap.
           const dot = document.createElement('span');
           dot.className = `spending-calendar-dot spending-calendar-dot-${levelName}`;
           dot.setAttribute('aria-hidden', 'true');
           cell.appendChild(dot);
           cell.setAttribute(
             'aria-label',
-            `${day}: ${currencyFormatter.format(dayData.total)} spent (${levelName} for this month)`
+            `${formatDayDetailDate(year, month, day)}, ${currencyFormatter.format(dayData.total)} spent`
           );
+
+          cell.addEventListener('click', () => {
+            openDayDetailSheet(day, dayData.total);
+          });
         }
         
         fragment.appendChild(cell);
@@ -1304,7 +1318,245 @@ document.addEventListener('DOMContentLoaded', () => {
       renderSpendingCalendar(dailyTotals);
     }
 
-    // Initial paint
+    /* ==============================================================
+       1.36 DAY DETAIL BOTTOM SHEET (v1.8 PHASE C)
+       Read-only detail for a single spending day, opened by tapping
+       its cell in the Spending Calendar above. Reuses
+       getAnalyticsMonthExpenses()/analyticsSelectedMonth for month
+       scope and currencyFormatter for amounts — no second way of
+       filtering to a month, no new currency formatting. Same four-
+       responsibility shape the rest of Analytics uses:
+         - getExpensesForCalendarDay() : pure filter, no DOM
+         - createDayDetailRow()        : one expense -> one <li>
+         - openDayDetailSheet()/closeDayDetailSheet() : show/hide
+         - attachDayDetailSheetEvents() : wires dismissal, once at init
+       Entirely self-contained — nothing above (Phase A/B) is touched,
+       and nothing below (Category Breakdown onward) reads from it.
+       ============================================================== */
+
+    const dayDetailSheetOverlay = document.getElementById('day-detail-sheet-overlay');
+    const dayDetailCloseBtn = document.getElementById('day-detail-close-btn');
+    const dayDetailDateEl = document.getElementById('day-detail-date');
+    const dayDetailTotalEl = document.getElementById('day-detail-total');
+    const dayDetailListEl = document.getElementById('day-detail-list');
+
+    const DAY_DETAIL_SHEET_TRANSITION_MS = 280;
+
+    // Restores whatever body scroll state was in place before the
+    // sheet opened — same technique as bodyOverflowBeforeSheet
+    // elsewhere in this file, kept local since that variable belongs
+    // to index.html-only code this page never reaches.
+    let dayDetailBodyOverflow = '';
+
+    /**
+     * Formats a single day as "7 August 2026" — the same
+     * day/month/year convention populateExpenseSheet() already uses
+     * for expense dates, so the sheet header and calendar aria-label
+     * (below) both read identically to the rest of Pebble.
+     * @param {number} year
+     * @param {number} month 0-indexed
+     * @param {number} day
+     * @returns {string}
+     */
+    function formatDayDetailDate(year, month, day) {
+      return new Date(year, month, day).toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      });
+    }
+
+    /**
+     * Formats a single expense's time as "8:42 PM" — the same
+     * convention populateExpenseSheet() already uses for expense
+     * time, kept separate from formatDayDetailDate() since the sheet
+     * needs the date once (in its header) and the time per-row.
+     * @param {Date} dateObj
+     * @returns {string}
+     */
+    function formatDayDetailTime(dateObj) {
+      return dateObj.toLocaleTimeString('en-IN', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+    }
+
+    /**
+     * Pure helper: every expense that falls on the given day of
+     * `analyticsSelectedMonth`. Matches Pebble's existing date
+     * convention exactly (new Date(expense.createdAt), then compare
+     * getFullYear()/getMonth()/getDate()) — no new timezone handling,
+     * no new date-matching approach. Preserves the source array's
+     * existing order; nothing here sorts or reverses it.
+     * @param {Array} expenseList
+     * @param {{year:number, month:number}} selectedMonth
+     * @param {number} day
+     * @returns {Array}
+     */
+    function getExpensesForCalendarDay(expenseList, selectedMonth, day) {
+      return expenseList.filter((expense) => {
+        const date = new Date(expense.createdAt);
+        return (
+          date.getFullYear() === selectedMonth.year &&
+          date.getMonth() === selectedMonth.month &&
+          date.getDate() === day
+        );
+      });
+    }
+
+    /**
+     * Builds one read-only row for the Day Detail sheet. Same
+     * category icon/name, note, payment method, and amount as the
+     * expense cards elsewhere in Pebble (getCategoryById,
+     * PAYMENT_METHOD_MAP, currencyFormatter — nothing new), just
+     * without the three-dot menu or tap-to-open behavior, since this
+     * sheet has no Edit/Delete/Save actions of its own.
+     * @param {object} expense
+     * @returns {HTMLLIElement}
+     */
+    function createDayDetailRow(expense) {
+      const categoryData = getCategoryById(expense.category);
+
+      const item = document.createElement('li');
+      item.className = 'expense-item';
+
+      const icon = document.createElement('span');
+      icon.className = 'expense-category-icon';
+      icon.textContent = categoryData ? categoryData.emoji : '✨';
+      icon.setAttribute('aria-hidden', 'true');
+      item.appendChild(icon);
+
+      const details = document.createElement('div');
+      details.className = 'expense-details';
+
+      const name = document.createElement('p');
+      name.className = 'expense-category-name';
+      name.textContent = categoryData ? categoryData.name : 'Others';
+      details.appendChild(name);
+
+      if (expense.note) {
+        const note = document.createElement('p');
+        note.className = 'expense-note';
+        note.textContent = expense.note;
+        details.appendChild(note);
+      }
+
+      const paymentMethodData = PAYMENT_METHOD_MAP.get(expense.paymentMethod);
+      const timeLabel = formatDayDetailTime(new Date(expense.createdAt));
+      const meta = document.createElement('p');
+      meta.className = 'expense-note';
+      meta.textContent = paymentMethodData
+        ? `${paymentMethodData.icon} ${paymentMethodData.name} · ${timeLabel}`
+        : timeLabel;
+      details.appendChild(meta);
+
+      item.appendChild(details);
+
+      const amount = document.createElement('p');
+      amount.className = 'expense-amount';
+      amount.textContent = currencyFormatter.format(expense.amount);
+      item.appendChild(amount);
+
+      return item;
+    }
+
+    /**
+     * Opens the Day Detail sheet for a given day of
+     * analyticsSelectedMonth: filters that day's expenses, fills the
+     * header/total/list, locks background scrolling, and slides the
+     * sheet up. Silently does nothing if the day turns out to have no
+     * expenses (defensive — the calendar only wires this to days that
+     * already showed spending when it was rendered).
+     * @param {number} day
+     * @param {number} total the day's pre-computed total, from the
+     *   same calculateSpendingCalendar() map the calendar itself used,
+     *   so the header can never disagree with the tapped cell.
+     */
+    function openDayDetailSheet(day, total) {
+      if (!dayDetailSheetOverlay) return;
+
+      const dayExpenses = getExpensesForCalendarDay(expenses, analyticsSelectedMonth, day);
+      if (dayExpenses.length === 0) return;
+
+      dayDetailDateEl.textContent = formatDayDetailDate(
+        analyticsSelectedMonth.year,
+        analyticsSelectedMonth.month,
+        day
+      );
+      dayDetailTotalEl.textContent = currencyFormatter.format(total);
+
+      dayDetailListEl.innerHTML = '';
+      const fragment = document.createDocumentFragment();
+      dayExpenses.forEach((expense) => {
+        fragment.appendChild(createDayDetailRow(expense));
+      });
+      dayDetailListEl.appendChild(fragment);
+
+      dayDetailBodyOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+
+      dayDetailSheetOverlay.hidden = false;
+      // Force a reflow before removing the hidden class so the
+      // slide-up transition actually runs — same technique
+      // openExpenseSheet() uses on index.html.
+      void dayDetailSheetOverlay.offsetWidth;
+      dayDetailSheetOverlay.classList.remove('sheet-hidden');
+
+      dayDetailCloseBtn.focus();
+    }
+
+    /**
+     * Closes the Day Detail sheet: slides it down, restores
+     * background scrolling, and — after the slide-down transition
+     * finishes — hides it from layout/the accessibility tree. Leaves
+     * analyticsSelectedMonth and the calendar's own month completely
+     * untouched; nothing here rerenders Analytics.
+     */
+    function closeDayDetailSheet() {
+      if (!dayDetailSheetOverlay) return;
+
+      dayDetailSheetOverlay.classList.add('sheet-hidden');
+      document.body.style.overflow = dayDetailBodyOverflow;
+
+      window.setTimeout(() => {
+        dayDetailSheetOverlay.hidden = true;
+      }, DAY_DETAIL_SHEET_TRANSITION_MS);
+    }
+
+    /**
+     * Wires every way the sheet can be dismissed. Called once below,
+     * at init — openDayDetailSheet() never re-attaches these.
+     */
+    function attachDayDetailSheetEvents() {
+      if (!dayDetailSheetOverlay) return;
+
+      dayDetailCloseBtn.addEventListener('click', closeDayDetailSheet);
+
+      // Tapping the dimmed backdrop closes it — a click only lands on
+      // the overlay itself when it didn't land on the sheet (or
+      // anything inside it), same pattern as the Expense Detail sheet.
+      dayDetailSheetOverlay.addEventListener('click', (event) => {
+        if (event.target === dayDetailSheetOverlay) {
+          closeDayDetailSheet();
+        }
+      });
+
+      // Escape closes it, but only while it's actually open.
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !dayDetailSheetOverlay.hidden) {
+          closeDayDetailSheet();
+        }
+      });
+    }
+
+    attachDayDetailSheetEvents();
+
+    // Initial paint for the Spending Calendar (moved below the Day
+    // Detail sheet's own function declarations above, purely so this
+    // section reads top-to-bottom without relying on function
+    // hoisting across sections — renderSpendingCalendar() above calls
+    // formatDayDetailDate()/openDayDetailSheet(), both defined here).
     updateSpendingCalendar();
 
     /* ==============================================================
