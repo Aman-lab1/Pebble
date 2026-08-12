@@ -8,7 +8,7 @@ A minimalist, offline-first expense tracker built for people who want to record 
 
 **Try Pebble here**
 
-https://aman-lab1.github.io/Pebble/
+[https://aman-lab1.github.io/Pebble/](https://aman-lab1.github.io/Pebble/)
 
 > For the best experience, install Pebble as a Progressive Web App (PWA).
 
@@ -28,7 +28,8 @@ Your data stays on your device.
 - 🔒 Privacy-first — your data never leaves your device
 - 📶 Works completely offline
 - 📱 Installable as a Progressive Web App (PWA)
-- 📊 Built-in analytics and smart spending insights
+- 📊 Detailed analytics and spending visualization
+- 🧠 Smart spending insights
 - ⚡ Fast, minimalist, distraction-free experience
 
 ---
@@ -39,7 +40,7 @@ Your data stays on your device.
 
 - Quick expense logging
 - Edit & delete expenses
-- Expense Detail Sheet
+- Read-only Expense Detail Sheet
 - Search expenses by category, note, payment method, or amount
 - Dynamic categories
 - Cash & Digital payment tracking
@@ -49,18 +50,41 @@ Your data stays on your device.
 
 - Monthly budget tracking
 - Budget remaining indicator
+- Average daily spending
 - Spending distribution
 - Category rankings
 - Monthly spending charts
+- Smart spending insights
 
 ### 📈 Analytics
 
+- Monthly navigation
 - Monthly Summary Cards
 - Daily Spending Trend
+- Spending Calendar
+- Calendar-based spending intensity visualization
+- Spending intensity legend
 - Category Breakdown
 - Payment Method Breakdown
 - Monthly Statistics
 - Smart Spending Insights
+- Read-only daily expense details
+
+### 🗓 Spending Calendar
+
+Pebble's Analytics calendar provides a visual way to understand spending across a month.
+
+- Full monthly calendar view
+- Daily spending visualization
+- Low / Medium / High spending intensity
+- Visual intensity indicators instead of cluttered currency values
+- Clear spending legend
+- Interactive spending days
+- Read-only daily expense details
+- Daily total and individual expense breakdown
+- Month navigation through the main Analytics navigation
+
+The calendar is designed for **visual discovery rather than editing** — helping users notice spending patterns that are harder to recognize from a simple weekly or monthly number.
 
 ### 🔍 Filters & Search
 
@@ -117,7 +141,7 @@ Pebble follows a minimalist, iOS-inspired design language focused on speed, clar
 
 Every feature is designed around one question:
 
-> Can this help users record an expense in fewer taps?
+> Can this help users understand or record their spending with fewer taps and less friction?
 
 If the answer is no, it doesn't belong in Pebble.
 
@@ -131,7 +155,7 @@ Pebble is a Progressive Web App (PWA), so there's nothing to download from an ap
 
 1. Open Pebble in **Safari**:
 
-   https://aman-lab1.github.io/Pebble/
+   [https://aman-lab1.github.io/Pebble/](https://aman-lab1.github.io/Pebble/)
 
 2. Tap the **Share** button (⬆️).
 
@@ -147,7 +171,7 @@ Pebble will now appear on your Home Screen and launch like a native app.
 
 1. Open Pebble in **Google Chrome**:
 
-   https://aman-lab1.github.io/Pebble/
+   [https://aman-lab1.github.io/Pebble/](https://aman-lab1.github.io/Pebble/)
 
 2. Tap the **⋮** (three-dot menu).
 
@@ -159,51 +183,49 @@ Pebble will now launch as a standalone app from your Home Screen.
 
 # 📦 Current Version
 
-## Pebble v1.4.0
+## Pebble v1.8.0
 
 ### What's New
 
-### 🔍 Search Experience
+### 🗓 Spending Calendar
 
-- Instant expense search
-- Search by category
-- Search by note
-- Search by payment method
-- Search by amount
-- Improved empty-state messaging for search results
+- Added a monthly spending calendar inside Analytics
+- Daily spending is visualized directly on calendar dates
+- Spending days are classified into Low, Medium, and High intensity
+- Added visual intensity indicators for quick spending discovery
+- Added a compact spending intensity legend
+- Calendar automatically follows the selected Analytics month
+- Calendar layout is responsive and mobile-first
+- Empty spending days remain visually clean
 
-### 📄 Expense Detail Sheet
+### 👆 Daily Spending Details
 
-- Native bottom-sheet experience
-- Complete expense information
-- Quick Edit and Delete actions
-- Frosted-glass backdrop
-- Smooth slide-up animations
+- Spending days can be tapped to view their expenses
+- Added a read-only daily expense detail sheet
+- Displays the selected date
+- Displays the total spent that day
+- Displays individual expenses
+- Shows category, note, payment method, time, and amount
+- No editing or deletion from the calendar view
+- Supports close button, overlay dismissal, and Escape key
 
-### 📊 Analytics
+### 🎨 Analytics Polish
 
-- Monthly Summary Cards
-- Daily Spending Trend
-- Category Breakdown
-- Payment Method Breakdown
-- Monthly Statistics
-- Smart Spending Insights
-
-### 💵 Payment Improvements
-
-- Cash & Digital tracking
-- Payment usage analytics
-- Last payment method remembered
+- Redesigned calendar cells with rounded, raised visual styling
+- Added subtle depth and edge highlights
+- Improved mobile spacing and sizing
+- Removed cramped daily currency text from calendar cells
+- Improved spending intensity visualization
+- Added accessible labels containing daily spending amounts
 
 ### 🛠 Developer Improvements
 
-- Google Analytics 4 integration
-- Microsoft Clarity integration
-- Google Search Console verification
-- Sitemap.xml & robots.txt
-- Updated PWA icons and manifest
-- Improved offline caching
-- Cleaner analytics architecture
+- Reused existing Analytics month state
+- Reused existing expense filtering and currency formatting
+- Reused Pebble's existing bottom-sheet architecture
+- No additional LocalStorage data structures
+- Calendar remains read-only and does not modify expenses
+- Improved separation between calendar visualization and expense management
 
 ---
 
@@ -211,9 +233,6 @@ Pebble will now launch as a standalone app from your Home Screen.
 
 ### Upcoming
 
-- Manage Categories
-- Custom Categories
-- Budget alerts
 - Smart notifications
 - Cloud backup (optional)
 - Multiple wallets
@@ -221,6 +240,7 @@ Pebble will now launch as a standalone app from your Home Screen.
 - CSV Import
 - Themes
 - Multi-currency support
+- Further Analytics improvements
 
 ---
 
