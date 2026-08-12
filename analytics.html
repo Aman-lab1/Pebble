@@ -131,6 +131,27 @@
       <div id="spending-calendar-grid" class="spending-calendar-grid" role="grid" aria-label="Daily spending">
         <!-- Day cells injected by script.js -->
       </div>
+
+      <!-- Legend for the three intensity dots above. Static markup —
+           the three levels/colors are fixed by design, so this never
+           needs to be generated or updated by script.js. Dots reuse
+           the exact same classes (.spending-calendar-dot-*) the
+           calendar cells use, so the colors can never drift out of
+           sync with the calendar itself. -->
+      <ul class="spending-calendar-legend">
+        <li class="spending-calendar-legend-item">
+          <span class="spending-calendar-legend-dot spending-calendar-dot-low"></span>
+          Low spending
+        </li>
+        <li class="spending-calendar-legend-item">
+          <span class="spending-calendar-legend-dot spending-calendar-dot-medium"></span>
+          Medium spending
+        </li>
+        <li class="spending-calendar-legend-item">
+          <span class="spending-calendar-legend-dot spending-calendar-dot-high"></span>
+          High spending
+        </li>
+      </ul>
     </section>
 
     <!-- ==================== CATEGORY BREAKDOWN ====================

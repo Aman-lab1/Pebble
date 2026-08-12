@@ -1164,15 +1164,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const spendingCalendarGridEl = document.getElementById('spending-calendar-grid');
 
-    // Number of visual intensity steps a spending day can land in.
-    // Kept small on purpose — Pebble's "subtle, not a heatmap" rule
-    // (see style.css) means the eye only needs to tell "a little",
-    // "some", "a lot" apart, not ten shades of it.
-    const SPENDING_INTENSITY_LEVELS = 4;
+    // Exactly three visual intensity steps, per the v1.8 Phase B
+    // redesign — LOW / MEDIUM / HIGH, each read from a small dot
+    // rather than a tinted cell background. Index 0 is unused (0
+    // spending) so level N maps directly to INTENSITY_LEVEL_NAMES[N].
+    const SPENDING_INTENSITY_LEVELS = 3;
+    const INTENSITY_LEVEL_NAMES = ['', 'low', 'medium', 'high'];
 
     /**
      * Calculates the total spending for each day of the selected
-     * month, plus a 1-4 relative intensity level for every day that
+     * month, plus a 1-3 relative intensity level for every day that
      * has spending. The level is derived from that day's total as a
      * fraction of the selected month's own highest single-day total
      * — never from a fixed rupee threshold — so a ₹50 day can read
@@ -1181,10 +1182,16 @@ document.addEventListener('DOMContentLoaded', () => {
      * spending gets at least level 1 (never rounds a real expense
      * down to "no spending"), and the day that IS the month's max
      * always lands exactly on the top level.
+     *
+     * Special case: when exactly one day in the month has spending,
+     * there is no real distribution to compare it against — calling
+     * it "high" (or "low") would imply a variation that doesn't
+     * exist. That lone day is given the middle (medium) level
+     * instead, a neutral read rather than a fabricated extreme.
      * @param {Array} expenseList 
      * @param {{year:number, month:number}} selectedMonth 
      * @returns {Map<number, {total: number, level: number}>} Map of
-     *   day (1-31) to that day's total and its 1-4 intensity level.
+     *   day (1-31) to that day's total and its 1-3 intensity level.
      */
     function calculateSpendingCalendar(expenseList, selectedMonth) {
       const monthExpenses = getAnalyticsMonthExpenses(expenseList, selectedMonth);
@@ -1204,11 +1211,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (total > maxDailyTotal) maxDailyTotal = total;
       });
 
+      const singleSpendingDay = dailyTotals.size === 1;
+
       const dailyData = new Map();
       dailyTotals.forEach((total, day) => {
-        const level = maxDailyTotal > 0
-          ? Math.min(SPENDING_INTENSITY_LEVELS, Math.ceil((total / maxDailyTotal) * SPENDING_INTENSITY_LEVELS))
-          : 0;
+        let level = 0;
+        if (total > 0) {
+          level = singleSpendingDay
+            ? 2 // Medium — one data point alone can't support a real low/high comparison.
+            : Math.min(SPENDING_INTENSITY_LEVELS, Math.max(1, Math.ceil((total / maxDailyTotal) * SPENDING_INTENSITY_LEVELS)));
+        }
         dailyData.set(day, { total, level });
       });
       
@@ -1258,12 +1270,22 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const dayData = dailyData.get(day);
         if (dayData && dayData.total > 0) {
+          const levelName = INTENSITY_LEVEL_NAMES[dayData.level] || 'low';
           cell.classList.add('has-spending');
-          cell.classList.add(`spending-intensity-${dayData.level}`);
-          const amount = document.createElement('div');
-          amount.className = 'spending-calendar-amount';
-          amount.textContent = currencyFormatter.format(dayData.total);
-          cell.appendChild(amount);
+          cell.classList.add(`spending-intensity-${levelName}`);
+
+          // Phase B communicates date + intensity only (no in-cell
+          // amount text — that's what caused the wrapping the redesign
+          // fixes). The exact figure still reaches assistive tech via
+          // aria-label; Phase C will surface it visually on tap.
+          const dot = document.createElement('span');
+          dot.className = `spending-calendar-dot spending-calendar-dot-${levelName}`;
+          dot.setAttribute('aria-hidden', 'true');
+          cell.appendChild(dot);
+          cell.setAttribute(
+            'aria-label',
+            `${day}: ${currencyFormatter.format(dayData.total)} spent (${levelName} for this month)`
+          );
         }
         
         fragment.appendChild(cell);
