@@ -143,6 +143,12 @@
 
     <!-- ==================== EXPENSE HISTORY ==================== -->
     <section id="expense-history" aria-label="Expense History">
+      <!-- Total for the currently displayed (filtered + searched)
+           expenses — see renderFilterSummary() in script.js. -->
+      <p id="filter-summary" class="filter-summary" aria-live="polite" hidden>
+        <span class="filter-summary-label">Total Spent · <span id="filter-summary-count">0 expenses</span></span>
+        <span id="filter-summary-amount" class="filter-summary-amount">₹0.00</span>
+      </p>
       <ul id="expense-history-list" class="expense-list">
         <!-- Expense entries injected by script.js -->
 

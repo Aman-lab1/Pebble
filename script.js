@@ -2370,6 +2370,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // markup; captured once since the set never changes at runtime.
   const filterButtons = document.querySelectorAll('#history-filters .filter-btn');
   const filterDescriptionEl = document.getElementById('filter-description');
+  const filterSummaryEl = document.getElementById('filter-summary');
+  const filterSummaryCountEl = document.getElementById('filter-summary-count');
+  const filterSummaryAmountEl = document.getElementById('filter-summary-amount');
   const historyFiltersNav = document.getElementById('history-filters');
   const filtersScrollHint = document.getElementById('filters-scroll-hint');
 
@@ -4040,6 +4043,38 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /**
+   * Formats an expense count with correct singular/plural, e.g.
+   * "1 expense" / "7 expenses" / "0 expenses". Shared by
+   * renderFilterSummary() (PHASE A — Filter Total Summary).
+   * @param {number} count
+   * @returns {string}
+   */
+  function formatExpenseCount(count) {
+    return `${count} expense${count === 1 ? '' : 's'}`;
+  }
+
+  /**
+   * Renders the compact "Total Spent" summary shown above the
+   * expense history list (PHASE A — Filter Total Summary). Takes
+   * the exact same filtered+searched array renderExpenses() was
+   * just given — see refreshUI(), which computes that array once
+   * — so the total and count shown here can never disagree with
+   * the list below them. Reuses the existing currencyFormatter
+   * (section 4) rather than introducing a second one.
+   * Hidden entirely for the 'all' filter — an all-time total isn't
+   * part of this feature's scope, only the per-filter ones below.
+   * @param {Array} filteredExpenses
+   */
+  function renderFilterSummary(filteredExpenses) {
+    filterSummaryEl.hidden = currentFilter === 'all';
+    if (filterSummaryEl.hidden) return;
+
+    const total = filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+    filterSummaryCountEl.textContent = formatExpenseCount(filteredExpenses.length);
+    filterSummaryAmountEl.textContent = currencyFormatter.format(total);
+  }
+
+  /**
    * Single entry point for refreshing everything that depends on
    * the currently displayed expense list. Computes the filtered
    * list exactly once, then hands that same array to
@@ -4053,6 +4088,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const dateFilteredExpenses = applyCurrentFilter(expenses);
     const filteredExpenses = applySearchFilter(dateFilteredExpenses);
     renderExpenses(filteredExpenses, dateFilteredExpenses.length > 0);
+    renderFilterSummary(filteredExpenses);
     updateDashboard(expenses);
     // The filter subtitle describes the active date filter itself
     // (e.g. "Showing this week's expenses"), so it's generated from

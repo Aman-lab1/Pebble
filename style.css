@@ -462,6 +462,2493 @@ body::-webkit-scrollbar,
   padding: 0 var(--space-1);
 }
 
+/* -- Filter total summary (PHASE A — Filter Total Summary) --
+   Sits directly above #expense-history-list; same small/secondary
+   text treatment as .filter-description, with only the amount
+   promoted to the primary text color + semibold weight (matching
+   .expense-amount) so it reads as the one number that matters. */
+.filter-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0 var(--space-1);
+  margin-bottom: var(--space-2);
+  font-size: var(--font-size-small);
+  color: var(--color-text-secondary);
+}
+
+.filter-summary-amount {
+  flex: 0 0 auto;
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Same fix as .empty-state[hidden] etc. above: .filter-summary's
+   own display:flex has equal specificity to the [hidden]
+   attribute selector and wins by source order, so without this
+   the element stays visible even when hidden is set. */
+.filter-summary[hidden] {
+  display: none;
+}
+
+/* -- Search bar (TASK 9) --
+   Same dark card background/radius as .card, deliberately without
+   .card's border — spec calls for no border, no shadow, no glow.
+   Pinned via CSS `position: sticky` only (no JS) so it stays put
+   while #expense-history-list scrolls underneath it; `top: 0` is
+   enough because the nearest scrolling ancestor here is the
+   document itself, same as every other sticky-free element in
+   .screen today. */
+.search-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--color-card);
+  border: none;
+  border-radius: var(--radius-card);
+  box-shadow: none;
+}
+
+.search-bar-icon {
+  flex: 0 0 auto;
+  color: var(--color-text-secondary);
+}
+
+.search-bar-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--font-size-body);
+  color: var(--color-text-primary);
+}
+
+.search-bar-input::placeholder {
+  color: var(--color-text-secondary);
+}
+
+.search-bar-clear-btn {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  color: var(--color-text-secondary);
+  background-color: var(--color-surface);
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.search-bar-clear-btn:hover {
+  background-color: var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.search-bar-clear-btn[hidden] {
+  display: none;
+}
+
+/* -- Save / Cancel buttons -- */
+.save-btn {
+  width: 100%;
+  padding: var(--space-3);
+  border-radius: var(--radius-button);
+  background-color: var(--color-text-primary);
+  color: #000000;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+  text-align: center;
+  transition: transform var(--transition-fast), opacity var(--transition-fast);
+}
+
+.save-btn:hover {
+  opacity: 0.9;
+}
+
+.save-btn:active {
+  transform: scale(0.98);
+}
+
+.cancel-btn {
+  width: 100%;
+  padding: var(--space-3);
+  border-radius: var(--radius-button);
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  text-align: center;
+  transition: background-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.cancel-btn:hover {
+  background-color: var(--color-border);
+}
+
+.cancel-btn:active {
+  transform: scale(0.98);
+}
+
+/* -- Floating Action Button -- */
+.fab {
+  position: fixed;
+  bottom: var(--space-5);
+  left: 50%;
+  transform: translateX(-50%);
+  width: var(--fab-size);
+  height: var(--fab-size);
+  border-radius: var(--radius-fab);
+  background-color: var(--color-text-primary);
+  color: #000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  transition:
+  transform var(--transition-fast),
+  background-color var(--transition-fast);
+}
+
+.fab:hover {
+  transform: translateX(-50%) scale(1.04);
+}
+
+.fab:active {
+  transform: translateX(-50%) scale(0.94);
+}
+
+.fab-icon {
+  font-size: 30px;
+  font-weight: var(--font-weight-regular);
+  line-height: 1;
+}
+
+
+/* ================================================================
+   8. FORMS
+   ================================================================ */
+
+/* -- Amount input -- */
+.amount-input-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  padding: var(--space-5) var(--space-3);
+}
+
+.currency-symbol {
+  font-size: var(--font-size-card-amount);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.amount-input {
+  width: auto;
+  max-width: 260px;
+  text-align: center;
+  font-size: 56px;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -1px;
+  background: transparent;
+  caret-color: var(--color-text-primary);
+}
+
+.amount-input::placeholder {
+  color: var(--color-text-disabled);
+}
+.amount-input:focus {
+    outline: none;
+}
+
+/* Remove native number spinners */
+.amount-input::-webkit-outer-spin-button,
+.amount-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.amount-input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: none;
+}
+
+/* -- Section title (used above sub-groups inside a form, e.g. the
+   Payment Method selector below the Category selector). Reuses the
+   same visual language as .card-label rather than introducing a new
+   type scale. -- */
+.section-title {
+  font-size: var(--font-size-card-label);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  letter-spacing: 0.2px;
+  padding: 0 0 var(--space-1);
+}
+
+/* -- Category selector -- */
+.category-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+}
+
+.category-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-radius: 999px;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  transition: background-color var(--transition-fast),
+              border-color var(--transition-fast),
+              transform var(--transition-fast);
+}
+
+.category-btn:hover {
+  background-color: var(--color-border);
+}
+
+.category-btn:active {
+  transform: scale(0.96);
+}
+
+.category-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.category-name {
+  line-height: 1;
+}
+
+/* Selected state — visually obvious, each category keeps its own color as an accent ring */
+.category-btn.category-btn-selected {
+  color: var(--color-text-primary);
+  background-color: var(--color-card);
+  border-color: currentColor;
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+
+.category-btn[data-category="food"].category-btn-selected               { color: var(--category-food); }
+.category-btn[data-category="transport"].category-btn-selected          { color: var(--category-transport); }
+.category-btn[data-category="shopping"].category-btn-selected           { color: var(--category-shopping); }
+.category-btn[data-category="health"].category-btn-selected             { color: var(--category-health); }
+.category-btn[data-category="college"].category-btn-selected            { color: var(--category-college); }
+.category-btn[data-category="hostel"].category-btn-selected             { color: var(--category-hostel); }
+.category-btn[data-category="entertainment"].category-btn-selected      { color: var(--category-entertainment); }
+.category-btn[data-category="others"].category-btn-selected             { color: var(--category-others); }
+
+/* -- Payment Method selector -- */
+/* Reuses .category-btn/.category-selector for layout and base look
+   (same pill shape, spacing, hover/active behavior) so it visually
+   matches the category selector exactly, per spec. Payment methods
+   have no per-category color mapping, so the selected state uses
+   the app's neutral primary-text accent instead of a per-item color
+   — same accent already used by .filter-btn-active elsewhere. */
+.payment-btn.category-btn-selected {
+  color: var(--color-text-primary);
+  background-color: var(--color-card);
+  border-color: var(--color-text-primary);
+  box-shadow: inset 0 0 0 1px var(--color-text-primary);
+}
+
+/* -- Note input -- */
+.note-input-wrap {
+  padding: 0;
+}
+
+.note-input {
+  width: 100%;
+  padding: var(--space-3);
+  border-radius: var(--radius-input);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  font-size: var(--font-size-body);
+  transition:
+  border-color var(--transition-fast),
+  background-color var(--transition-fast);
+}
+
+.note-input::placeholder {
+  color: var(--color-text-disabled);
+}
+
+.note-input:focus {
+  outline: none;
+  border-color: var(--color-text-secondary);
+}
+
+#add-expense-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  flex: 1;
+}
+
+#save-expense-btn {
+  margin-top: auto;
+}
+
+
+/* ================================================================
+   9. BOTTOM SHEET
+   ================================================================ */
+
+.sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 40;
+  opacity: 1;
+  transition: opacity var(--transition-base);
+}
+
+.sheet-overlay[hidden] {
+  display: none;
+}
+
+.sheet-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.bottom-sheet {
+  width: 100%;
+  max-width: var(--max-content-width);
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-bottom: none;
+  border-top-left-radius: var(--radius-sheet);
+  border-top-right-radius: var(--radius-sheet);
+  padding: var(--space-4) var(--space-4) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  text-align: center;
+  transform: translateY(0);
+  transition: transform var(--transition-base);
+}
+
+.sheet-hidden .bottom-sheet {
+  transform: translateY(100%);
+}
+
+.bottom-sheet-title {
+  font-size: var(--font-size-section-title);
+  font-weight: var(--font-weight-semibold);
+}
+
+#budget-sheet-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.bottom-sheet-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.bottom-sheet-actions .cancel-btn,
+.bottom-sheet-actions .save-btn {
+  flex: 1;
+}
+
+/* -- Custom date range fields (reuses the bottom sheet shell) -- */
+#custom-range-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.date-range-fields {
+  width: 100%;
+  display: flex;
+  gap: var(--space-2);
+}
+
+.date-field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  text-align: left;
+}
+
+.date-field-label {
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.date-input {
+  width: 100%;
+  padding: var(--space-3);
+  border-radius: var(--radius-input);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  font-size: var(--font-size-body);
+  color: var(--color-text-primary);
+  transition: border-color var(--transition-fast);
+}
+
+.date-input:focus {
+  outline: none;
+  border-color: var(--color-text-secondary);
+}
+
+.field-error {
+  width: 100%;
+  text-align: left;
+  font-size: var(--font-size-small);
+  color: var(--color-danger);
+}
+
+.field-error[hidden] {
+  display: none;
+}
+
+
+/* ================================================================
+   10. EXPENSE CARDS
+   ================================================================ */
+
+.expense-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.expense-item {
+  position: relative;
+
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  transition: background-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.expense-item:hover {
+  background-color: var(--color-surface);
+}
+
+.expense-item:active {
+  transform: scale(0.99);
+}
+
+.expense-category-icon {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background-color: var(--color-surface);
+  font-size: 18px;
+}
+
+.expense-details {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.expense-category-name {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  overflow: hidden;
+}
+
+.expense-note {
+  font-size: var(--font-size-small);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.expense-amount {
+  flex: 0 0 auto;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+}
+
+.expense-menu-btn {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--color-text-secondary);
+  transition: background-color var(--transition-fast);
+}
+
+.expense-menu-btn:hover {
+  background-color: var(--color-border);
+}
+
+.expense-menu-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.expense-menu {
+  position: absolute;
+  right: var(--space-3);
+  margin-top: var(--space-6);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-button);
+  overflow: hidden;
+  min-width: 140px;
+  z-index: 10;
+}
+
+.expense-menu[hidden] {
+  display: none;
+}
+
+.expense-menu-item {
+  width: 100%;
+  padding: var(--space-3);
+  text-align: left;
+  font-size: var(--font-size-body);
+  transition: background-color var(--transition-fast);
+}
+
+.expense-menu-item:hover {
+  background-color: var(--color-border);
+}
+
+.expense-menu-item[data-action="delete"] {
+  color: var(--color-danger);
+}
+
+/* -- Category icon accent colors -- */
+.expense-item[data-category="food"] .expense-category-icon               { color: var(--category-food); }
+.expense-item[data-category="transport"] .expense-category-icon          { color: var(--category-transport); }
+.expense-item[data-category="shopping"] .expense-category-icon           { color: var(--category-shopping); }
+.expense-item[data-category="health"] .expense-category-icon             { color: var(--category-health); }
+.expense-item[data-category="college"] .expense-category-icon            { color: var(--category-college); }
+.expense-item[data-category="hostel"] .expense-category-icon             { color: var(--category-hostel); }
+.expense-item[data-category="entertainment"] .expense-category-icon      { color: var(--category-entertainment); }
+.expense-item[data-category="others"] .expense-category-icon             { color: var(--category-others); }
+
+
+/* ================================================================
+   11. ANALYTICS
+   ================================================================ */
+
+/* Category Summary rows (populated by script.js inside .category-list) */
+.category-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-1) 0;
+  font-size: var(--font-size-small);
+}
+
+.category-summary-row .category-summary-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-secondary);
+}
+
+.category-summary-row .category-summary-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.category-summary-row .category-summary-amount {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
+
+/* ================================================================
+   12. UTILITIES
+   ================================================================ */
+
+.empty-state {
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-body);
+  padding: var(--space-6) var(--space-3);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:12px;
+}
+
+/* Without this, [hidden]'s default display:none loses the cascade
+   to .empty-state's own display:flex above (equal specificity,
+   author rule wins by source order) — the element stayed visible
+   even when the `hidden` attribute/property was true. Same fix
+   already applied to .sheet-overlay, .field-error, .expense-menu. */
+.empty-state[hidden] {
+  display: none;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Consistent focus visibility across interactive elements */
+button:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--color-text-primary);
+  outline-offset: 2px;
+}
+
+
+/* ================================================================
+   13. RESPONSIVE
+   ================================================================ */
+
+@media (max-width: 360px) {
+  :root {
+    --font-size-app-title: 28px;
+    --font-size-card-amount: 30px;
+  }
+
+  .amount-input {
+    font-size: 46px;
+  }
+
+  .date-range-fields {
+    flex-direction: column;
+  }
+}
+
+@media (min-width: 481px) {
+  .fab {
+    bottom: var(--space-6);
+  }
+}
+
+
+/* ================================================================
+   14. SETTINGS PANEL (PHASE 10)
+   Right-side slide-over, separate from the bottom-sheet pattern in
+   section 9 (those slide up from the bottom and cover the full
+   width; this slides in from the right and covers ~80%). Reuses
+   existing tokens (--transition-base, --radius-*, --space-*, card
+   colors) rather than introducing a new palette.
+   ================================================================ */
+
+/* -- Icon button (Settings icon in the header, Close in the panel) -- */
+.icon-btn {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  transition: background-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.icon-btn:hover {
+  background-color: var(--color-border);
+}
+
+.icon-btn:active {
+  transform: scale(0.92);
+}
+
+/* -- Overlay: dims + blurs the Home screen behind the panel -- */
+.settings-overlay {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: var(--max-content-width);
+  display: flex;
+  justify-content: flex-end;
+  background-color: rgba(0, 0, 0, 0.45);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  z-index: 50;
+  opacity: 1;
+  transition: opacity 300ms ease-out;
+}
+
+.settings-overlay[hidden] {
+  display: none;
+}
+
+.settings-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* While the panel is closing/closed, its own blur+dim shouldn't
+   still visually apply — .settings-hidden's opacity: 0 fades this
+   whole layer out, backdrop-filter included. */
+
+/* -- The panel itself -- */
+.settings-panel {
+  width: min(80%, 420px);
+  height: 100%;
+  background-color: var(--color-card);
+  border-left: 1px solid var(--color-border);
+  border-top-left-radius: var(--radius-sheet);
+  border-bottom-left-radius: var(--radius-sheet);
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  transform: translateX(0);
+  transition: transform 300ms ease-out;
+}
+
+.settings-hidden .settings-panel {
+  transform: translateX(100%);
+}
+
+.settings-panel-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-4) var(--space-3);
+}
+
+.settings-panel-title {
+  font-size: var(--font-size-section-title);
+  font-weight: var(--font-weight-semibold);
+}
+
+.settings-panel-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 0 var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* -- Accordion sections -- */
+.settings-section {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.settings-section:last-child {
+  border-bottom: none;
+}
+
+.settings-section-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) 0;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  text-align: left;
+}
+
+.settings-chevron {
+  flex: 0 0 auto;
+  color: var(--color-text-secondary);
+  transition: transform var(--transition-base);
+}
+
+.settings-section-toggle[aria-expanded="true"] .settings-chevron {
+  transform: rotate(180deg);
+}
+
+/* Height is measured and set inline by setupAccordion() in
+   script.js (via scrollHeight) — this transition is what makes that
+   inline change animate instead of jumping instantly. */
+.settings-section-panel {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 300ms ease-out;
+}
+
+.settings-section-panel-inner {
+  padding-bottom: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.settings-section-description {
+  font-size: var(--font-size-small);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.settings-empty-message {
+  font-size: var(--font-size-small);
+  color: var(--color-text-disabled);
+  text-align: center;
+}
+
+.settings-empty-message[hidden] {
+  display: none;
+}
+
+#export-csv-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#export-csv-btn:disabled:hover {
+  opacity: 0.5;
+}
+
+/* -- Footer: pinned below the scrollable body, never overlapped -- */
+.settings-panel-footer {
+  flex: 0 0 auto;
+  padding: var(--space-3) var(--space-4)
+    max(var(--space-4), env(safe-area-inset-bottom));
+  border-top: 1px solid var(--color-border);
+  text-align: center;
+}
+
+.settings-footer-credit {
+  font-size: var(--font-size-small);
+  color: var(--color-text-secondary);
+}
+
+.settings-footer-version {
+  font-size: var(--font-size-small);
+  color: var(--color-text-disabled);
+  margin-top: var(--space-1);
+}
+
+
+/* ================================================================
+   22. SUCCESS TOAST (reusable — showToast(icon, message))
+   A single, generic centered toast used for any brief confirmation
+   (Expense Saved, Expense Updated, and future ones like Expense
+   Deleted / CSV Exported). Fixed to the viewport rather than the
+   app shell so it floats above every screen, including the
+   Settings panel and any open bottom sheet. pointer-events: none
+   means it never intercepts taps on whatever is behind it.
+   ================================================================ */
+
+.toast {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 168px;
+  max-width: 240px;
+  padding: var(--space-5) var(--space-4);
+  background-color: rgba(24, 24, 24, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 21px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.45), 0 2px 10px rgba(0, 0, 0, 0.3);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -50%) translateY(6px) scale(0.95);
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+
+/* Same cascade guard used elsewhere in this file (see PHASE 7.6):
+   the component's own display:flex would otherwise beat [hidden]'s
+   default display:none. */
+.toast[hidden] {
+  display: none;
+}
+
+.toast-visible {
+  opacity: 1;
+  transform: translate(-50%, -50%) translateY(0) scale(1);
+}
+
+.toast-hiding {
+  opacity: 0;
+  transform: translate(-50%, -50%) translateY(0) scale(0.98);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.toast-icon {
+  flex: 0 0 auto;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background-color: var(--color-success);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toast-icon svg {
+  width: 26px;
+  height: 26px;
+}
+
+.toast-message {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  text-align: center;
+  line-height: 1.3;
+  /* v1.6 Phase A — Budget Alerts: lets a toast message with an
+     explicit "\n" (the two-line budget-alert copy) render as a real
+     line break. No existing toast message contains "\n", so this is
+     a no-op for every toast that predates this feature. */
+  white-space: pre-line;
+}
+
+@media (max-width: 380px) {
+  .toast {
+    min-width: 152px;
+    max-width: 220px;
+    padding: var(--space-4) var(--space-4);
+  }
+}
+
+
+/* ================================================================
+   20. ANALYTICS (v1.2 — TASK 1: FOUNDATION)
+   Placeholder sections only. Every rule here builds on top of the
+   existing .card / .card-label tokens above rather than introducing
+   a parallel style — so when Task 2+ fills these in with real
+   charts and stats, they inherit Pebble's look for free.
+   ================================================================ */
+
+.analytics-placeholder-card {
+  min-height: 96px;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+/* -- Summary Cards (TASK 3) --
+   One .card holding three stat items in a row, rather than three
+   separate cards — keeps the three related numbers scannable at a
+   glance instead of costing three full card-widths of vertical
+   space. .analytics-summary-item reuses .card-label as-is for its
+   heading; only the value below it needs its own, smaller-than-
+   --font-size-card-amount size so three ₹ values with different
+   digit counts all still fit their column on a narrow screen. */
+.analytics-summary-cards {
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.analytics-summary-item {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.analytics-summary-amount {
+  font-size: 18px;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -0.3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* -- Spending Trend (TASK 4) --
+   Same fixed-height philosophy as #chart-container/#spending-chart
+   above: a wrapper with a set height (not an aspect ratio) so the
+   canvas has a stable box to measure into on first paint, plus
+   width:100%!important + a matching max-height on the canvas itself
+   as a second guard. Chart.js is given maintainAspectRatio:false in
+   script.js so it fills this fixed box instead of trying to hold a
+   1:1 ratio the way the dashboard's pie chart does — appropriate
+   here since a day-by-day line has no reason to be square. */
+.analytics-chart-wrap {
+  margin-top: var(--space-1);
+  min-height: 200px;
+  max-height: 200px;
+}
+
+#analytics-trend-chart {
+  width: 100% !important;
+  max-height: 200px;
+}
+
+/* -- Category Breakdown (TASK 5) --
+   Deliberately not the dashboard's .category-list/.category-summary-*
+   rows (those have no percentage or bar) — this is a ranked list, so
+   each row gets its own slim bar underneath. .analytics-category-bar
+   mirrors .progress-track's shape (pill track, rounded fill, same
+   --transition-base) at a slimmer 6px, since a per-row bar next to
+   five others should read as understated, not compete with the
+   month's headline numbers above it. */
+.analytics-category-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-1);
+}
+
+.analytics-category-list[hidden] {
+  display: none;
+}
+
+.analytics-category-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.analytics-category-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.analytics-category-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-small);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analytics-category-icon {
+  flex: 0 0 auto;
+  line-height: 1;
+}
+
+.analytics-category-figures {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex: 0 0 auto;
+}
+
+.analytics-category-amount {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-small);
+}
+
+.analytics-category-percent {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-small);
+  min-width: 38px;
+  text-align: right;
+}
+
+.analytics-category-bar {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background-color: var(--color-surface);
+  overflow: hidden;
+}
+
+.analytics-category-bar-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  transition: width var(--transition-base);
+}
+
+/* -- Payment Methods (TASK 6) --
+   ONE merged bar rather than two side-by-side bars: a flex row of
+   exactly two children whose widths always sum to 100% (see
+   calculatePaymentBreakdown() in script.js), inside a container that
+   clips to a pill shape. Because only the outer container is rounded
+   and overflow is hidden, the two fills meet along a single straight
+   seam in the middle with no gap and no double-rounded corners there
+   — the "fully rounded ends, clean meeting in the middle" look — with
+   zero extra positioning math. Colors reuse two existing category
+   variables (hostel cyan / others gray) rather than introducing new
+   ones, same restraint as every other analytics section. */
+.analytics-payment-bar {
+  display: flex;
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background-color: var(--color-surface);
+  overflow: hidden;
+  margin-top: var(--space-1);
+}
+
+.analytics-payment-bar-fill {
+  height: 100%;
+  width: 0%;
+  transition: width var(--transition-base);
+}
+
+.analytics-payment-bar-digital {
+  background-color: var(--category-hostel);
+}
+
+.analytics-payment-bar-cash {
+  background-color: var(--category-others);
+}
+
+.analytics-payment-bar[hidden],
+.analytics-payment-figures[hidden] {
+  display: none;
+}
+
+/* Figures row: Digital pinned left, Cash pinned right (same
+   space-between approach as .analytics-month-nav), so the two sides
+   read as the bar's legend directly beneath it. */
+.analytics-payment-figures {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.analytics-payment-figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.analytics-payment-figure-right {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.analytics-payment-figure-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-small);
+}
+
+.analytics-payment-figure-right .analytics-payment-figure-label {
+  flex-direction: row-reverse;
+}
+
+.analytics-payment-figure-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.analytics-payment-dot-digital {
+  background-color: var(--category-hostel);
+}
+
+.analytics-payment-dot-cash {
+  background-color: var(--category-others);
+}
+
+.analytics-payment-figure-amount {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-body);
+}
+
+.analytics-payment-figure-percent {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-small);
+}
+
+/* -- Monthly Statistics (TASK 7) --
+   A 2x2 grid rather than four separate cards, per spec — each cell
+   reuses .card-label as-is for its heading (same reuse as
+   .analytics-summary-item) plus one larger value line underneath.
+   No shadows/gradients/decorative effects: cells are plain grid
+   items, not their own bordered/backgrounded boxes. */
+.analytics-statistics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  margin-top: var(--space-1);
+}
+
+.analytics-statistics-grid[hidden] {
+  display: none;
+}
+
+.analytics-statistic-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.analytics-statistic-value {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-body);
+}
+
+.analytics-stat-primary {
+  color: var(--color-text-primary);
+}
+
+.analytics-stat-secondary {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-small);
+}
+
+/* -- Smart Insight (TASK 8) --
+   One plain text line, icon + message — no card-within-a-card, no
+   shadow/gradient, consistent with the "no decorative effects" rule
+   already followed by Statistics/Payment Methods above. Sized like
+   .analytics-statistic-value since both are a single primary line
+   under a .card-label heading. */
+.analytics-insight-text {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.4;
+}
+
+.analytics-insight-icon:empty {
+  display: none;
+}
+
+/* Default/no-insight state: same line, no icon, muted to read as a
+   quiet placeholder rather than an actual finding — same color
+   .analytics-category-name and .analytics-payment-figure-label
+   already use for secondary text. */
+.analytics-insight-text-empty {
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+
+/* -- Month Navigation (TASK 2) --
+   .card defaults to a column layout (see section 5); this overrides
+   it to a row so the two chevrons sit at the edges. The label is
+   flex: 1 and text-centered, and since both .back-btn chevrons are
+   the same fixed 40px width, that centers the label perfectly
+   regardless of how wide "September 2026" vs "May 2026" is — no
+   manual offset math needed. The chevrons themselves are the exact
+   same .back-btn already used in the header above; nothing new was
+   introduced for them. */
+.analytics-month-nav {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+}
+
+.analytics-month-nav-label {
+  flex: 1;
+  text-align: center;
+  font-size: var(--font-size-section-title);
+  font-weight: var(--font-weight-semibold);
+  transition: opacity var(--transition-fast);
+}
+
+/* Brief crossfade while the label text swaps, toggled from script.js
+   for a native, non-jarring month change instead of an instant snap. */
+.analytics-month-nav-label.analytics-month-label-transitioning {
+  opacity: 0;
+}
+
+/* Right chevron once analyticsSelectedMonth is the current calendar
+   month — identical rule shape to #export-csv-btn:disabled above,
+   reusing --transition-fast implicitly via .back-btn's own
+   transition rather than adding a new one. */
+#analytics-next-month-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#analytics-next-month-btn:disabled:hover {
+  opacity: 0.5;
+}
+
+/* ==============================================================
+   SPENDING CALENDAR (Analytics)
+   No month controls of its own (v1.8 Phase B) — it reads the same
+   analyticsSelectedMonth the main Analytics month nav above drives,
+   so there's nothing here to align with a second header, only the
+   weekday row against the day grid below it.
+   ============================================================== */
+
+/* Weekday row and day grid share the exact same column math —
+   repeat(7, 1fr) AND the same gap — so column N's center in one
+   lands exactly on column N's center in the other. A grid with a
+   gap and one without don't divide their width the same way even
+   at identical column counts, which is what drifted the header out
+   of alignment with the cells; matching the gap here is the fix. */
+.spending-calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--space-1);
+  text-align: center;
+  font-size: var(--font-size-small);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-2);
+  font-weight: var(--font-weight-medium);
+}
+
+.spending-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--space-1);
+}
+
+/* Rounded, faintly-raised "glass" tile. aspect-ratio keeps every
+   tile a true square off the grid's own 1fr column width, so sizing
+   stays correct at any viewport without a hardcoded min-height. The
+   subtle depth is three layered, low-opacity effects rather than one
+   strong one: a soft top-left sheen (background gradient), a hairline
+   border, and an inset top highlight + soft outer shadow — restrained
+   on purpose, per the "no neon dashboard" brief. border-radius reuses
+   --radius-input (an existing token) instead of introducing a new one. */
+.spending-calendar-cell {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--color-text-primary) 5%, var(--color-surface)) 0%,
+    var(--color-surface) 55%,
+    color-mix(in srgb, var(--color-bg) 55%, var(--color-surface)) 100%
+  );
+  border: 1px solid color-mix(in srgb, var(--color-text-primary) 10%, var(--color-border));
+  border-radius: var(--radius-input);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--color-text-primary) 7%, transparent),
+    0 1px 3px rgba(0, 0, 0, 0.45);
+}
+
+.spending-calendar-cell-empty {
+  aspect-ratio: 1 / 1;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* -- Interactive spending days (v1.8 Phase C) --
+   Spending days render as a native <button> (see script.js) so they
+   stay reachable and operable via keyboard/assistive tech; this is
+   purely a button reset so it's pixel-identical to the plain <div>
+   cell it replaces — every visual rule above still applies via the
+   shared .spending-calendar-cell class. Non-spending days stay
+   non-interactive <div>s and are untouched by this rule. */
+button.spending-calendar-cell {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button.spending-calendar-cell:focus-visible {
+  outline: 2px solid var(--color-text-secondary);
+  outline-offset: 2px;
+}
+
+.spending-calendar-day-num {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  line-height: 1;
+}
+
+.spending-calendar-cell:not(.has-spending) .spending-calendar-day-num {
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-regular);
+}
+
+/* -- Spending Intensity dot (TASK 4/5, Phase B) --
+   Exactly three levels, classified in script.js relative to the
+   selected month's own busiest day, never a fixed rupee scale. Colour
+   is the only signal — the cell body no longer tints per level — so
+   it reuses three colours already in Pebble's category palette
+   (transport blue / college purple / food orange) rather than
+   inventing a new one. The dot sits in the corner, well clear of the
+   date number, and the currentColor glow is small and low-opacity so
+   it reads as a subtle indicator, not a highlighter. */
+.spending-calendar-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  box-shadow: 0 0 3px 0 currentColor;
+}
+
+.spending-calendar-dot-low {
+  background-color: var(--category-transport);
+  color: var(--category-transport);
+}
+
+.spending-calendar-dot-medium {
+  background-color: var(--category-college);
+  color: var(--category-college);
+}
+
+.spending-calendar-dot-high {
+  background-color: var(--category-food);
+  color: var(--category-food);
+}
+
+/* -- Spending Calendar Legend --
+   Explains the three dot colors above. Deliberately not built on
+   .spending-calendar-dot itself: that class is position: absolute,
+   anchored to a calendar cell, which isn't the context here. This
+   only borrows its color modifiers (-low/-medium/-high) so the
+   legend swatches can never fall out of sync with the calendar's
+   actual dot colors, while its own shape rule stays static/inline.
+   Sits below the grid, inside the same card, and reuses card-label's
+   secondary color/size so it visually reads as a caption for the
+   calendar rather than a peer of it. */
+.spending-calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+}
+
+.spending-calendar-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-small);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.spending-calendar-legend-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+@media (min-width: 768px) {
+  .spending-calendar-grid {
+    gap: var(--space-2);
+  }
+  .spending-calendar-weekdays {
+    gap: var(--space-2);
+  }
+  .spending-calendar-day-num {
+    font-size: var(--font-size-section-title);
+  }
+  .spending-calendar-dot {
+    top: 8px;
+    right: 8px;
+    width: 7px;
+    height: 7px;
+  }
+}
+
+
+/* ================================================================
+   23. EXPENSE DETAIL SHEET (v1.4.0 — TASK 10)
+   Reuses .sheet-overlay / .bottom-sheet / .sheet-hidden /
+   .bottom-sheet-actions / .save-btn wholesale from section 9 above
+   — only what's genuinely new lives here. Every new rule is scoped
+   to .expense-detail-overlay / .expense-detail-sheet / .expense-
+   detail-* so none of it can leak onto the Monthly Budget sheet or
+   Custom Range sheet, which stay pixel-for-pixel unchanged.
+   ================================================================ */
+
+/* -- Backdrop: blur + soft dark, never a harsh black screen -- */
+.expense-detail-overlay {
+  background-color: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* -- Sheet shell: ~55–60% of viewport height, own slide timing -- */
+.expense-detail-sheet {
+  position: relative;
+  height: 58vh;
+  max-height: 620px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-top: var(--space-6);
+  padding-bottom: calc(var(--space-5) + env(safe-area-inset-bottom, 0px));
+  /* Ease-out slide, no bounce/overshoot — same property the base
+     .bottom-sheet rule animates, just a slightly longer, smoother
+     curve for this taller sheet. */
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* -- Drag handle -- */
+.sheet-drag-handle {
+  position: absolute;
+  top: var(--space-2);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background-color: var(--color-border);
+}
+
+/* -- Close button (top-right corner) -- */
+.expense-detail-close-btn {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--color-text-secondary);
+  background-color: var(--color-surface);
+  transition: background-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.expense-detail-close-btn:hover {
+  background-color: var(--color-border);
+}
+
+.expense-detail-close-btn:active {
+  transform: scale(0.92);
+}
+
+/* -- Header: large emoji, category name, amount -- */
+.expense-detail-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding-top: var(--space-2);
+}
+
+.expense-detail-icon {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background-color: var(--color-surface);
+  font-size: 32px;
+  margin-bottom: var(--space-2);
+}
+
+.expense-detail-category {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.expense-detail-amount {
+  font-size: var(--font-size-card-amount);
+  font-weight: var(--font-weight-bold);
+}
+
+/* -- Detail rows: icon + label + value, one per line -- */
+.expense-detail-rows {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: 0 var(--space-3);
+}
+
+.expense-detail-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.expense-detail-rows .expense-detail-row:last-child {
+  border-bottom: none;
+}
+
+.expense-detail-row[hidden] {
+  display: none;
+}
+
+.expense-detail-row-icon {
+  flex: 0 0 auto;
+  width: 20px;
+  font-size: 16px;
+  text-align: center;
+}
+
+.expense-detail-row-label {
+  flex: 1 1 auto;
+  font-size: var(--font-size-small);
+  color: var(--color-text-secondary);
+}
+
+.expense-detail-row-value {
+  flex: 0 0 auto;
+  max-width: 55%;
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* -- Note card: only rendered into view when a note exists -- */
+.expense-detail-note-card {
+  width: 100%;
+  text-align: left;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: var(--space-3);
+}
+
+.expense-detail-note-card[hidden] {
+  display: none;
+}
+
+.expense-detail-note-text {
+  font-size: var(--font-size-body);
+  color: var(--color-text-primary);
+  margin-top: var(--space-1);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* -- Actions: Edit / Delete, equal width -- */
+.expense-detail-actions {
+  width: 100%;
+  margin-top: auto;
+}
+
+/* -- Day Detail Sheet (v1.8 Phase C) --
+   Read-only day-expense list, opened by tapping a spending day in
+   the Spending Calendar (Phase B, frozen — untouched). Reuses the
+   .expense-detail-sheet shell above plus .expense-item and its
+   children as-is; the only thing those don't already account for is
+   the .bottom-sheet's own text-align: center, which every other
+   scrollable-list sheet (.manage-categories-list) already overrides
+   the same way. Hover/active feedback is muted here since these
+   rows aren't tappable, unlike the identical-looking cards on the
+   Home screen. -- */
+.day-detail-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  text-align: left;
+}
+
+.day-detail-list .expense-item:hover {
+  background-color: var(--color-card);
+}
+
+.day-detail-list .expense-item:active {
+  transform: none;
+}
+
+.delete-btn {
+  width: 100%;
+  padding: var(--space-3);
+  border-radius: var(--radius-button);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-danger);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  text-align: center;
+  transition: background-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.delete-btn:hover {
+  background-color: var(--color-border);
+}
+
+.delete-btn:active {
+  transform: scale(0.98);
+}
+
+/* ================================================================
+   23. MANAGE CATEGORIES (v1.5 Phase B)
+   Reuses the same tokens as everything above — cards, bottom
+   sheets, .save-btn/.cancel-btn/.delete-btn, .field-error, the
+   .expense-detail-sheet taller/scrollable shell — nothing new is
+   introduced beyond what this section actually needs.
+   ================================================================ */
+
+/* -- Stacking: the Add Category sheet and Delete confirmation sheet
+   open on top of the Manage Categories sheet, which is itself a
+   normal .sheet-overlay (z-index 40). Both reuse .add-category-
+   overlay purely as a z-index bump — nothing else about them
+   differs from a standard .sheet-overlay/.bottom-sheet. -- */
+.add-category-overlay {
+  z-index: 50;
+}
+
+/* -- Category list rows -- */
+.manage-categories-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  text-align: left;
+  overflow-y: auto;
+}
+
+.manage-category-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+}
+
+.manage-category-icon {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background-color: var(--color-card);
+  font-size: 17px;
+}
+
+.manage-category-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.manage-category-badge {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 3px var(--space-2);
+  letter-spacing: 0.3px;
+}
+
+.manage-category-delete-btn {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--color-danger);
+  transition: background-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.manage-category-delete-btn:hover {
+  background-color: var(--color-border);
+}
+
+.manage-category-delete-btn:active {
+  transform: scale(0.9);
+}
+
+/* The Others bucket is structurally required as the migration
+   target for deleted categories' expenses, so its delete control is
+   muted rather than removed — tapping it still explains why via the
+   existing toast, it never fails silently. */
+.manage-category-delete-btn.manage-category-delete-protected {
+  color: var(--color-text-disabled);
+}
+
+/* -- Add Category form -- */
+.add-category-field {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  text-align: left;
+}
+
+.add-category-emoji-input {
+  text-align: center;
+  font-size: 24px;
+}
+
+.add-category-emoji-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding-top: var(--space-1);
+}
+
+.emoji-preset-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-button);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  font-size: 18px;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.emoji-preset-btn:hover {
+  background-color: var(--color-border);
+}
+
+.emoji-preset-btn:active {
+  transform: scale(0.92);
+}
+
+.emoji-preset-btn.emoji-preset-selected {
+  border-color: var(--color-text-primary);
+  box-shadow: inset 0 0 0 1px var(--color-text-primary);
+}
+
+#add-category-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.delete-category-message {
+  text-align: center;
+}
+
+/* -- Colored accents for custom categories, whose ids have no
+   matching --category-* CSS variable (see the per-id rules in
+   sections 7 and 10 above, which only cover Pebble's 8 defaults).
+   Both places already colored per-category set this custom property
+   inline (see script.js, createCategoryButton()/createExpenseCard())
+   for EVERY category, default or custom; the lower-specificity
+   fallback rules here only ever win for ids that have no matching
+   attribute-selector rule above, so no default category's look
+   changes by a single pixel. -- */
+.category-btn.category-btn-selected {
+  color: var(--btn-accent, var(--color-text-primary));
+}
+
+.expense-item .expense-category-icon {
+  color: var(--icon-accent, inherit);
+}
+
+
+/* ================================================================
+   26. BACKUP & RESTORE (v1.7)
+   Reuses .sheet-overlay/.bottom-sheet/.bottom-sheet-title/
+   .bottom-sheet-actions/.cancel-btn/.save-btn/.delete-btn/.card/
+   .card-label/.settings-section-description/.expense-detail-close-
+   btn/.sheet-drag-handle wholesale — nothing above is touched. Only
+   the handful of layout rules genuinely new to this feature live
+   here: positioning the close button on the plain .bottom-sheet
+   shell (Manage Categories' taller .expense-detail-sheet would be
+   mostly empty space for just two compact cards), left-aligning the
+   two action cards instead of the sheet's default centered text,
+   and the small icon+label row used by the Settings entry itself.
+   ================================================================ */
+
+/* The plain .bottom-sheet shell has no positioning context of its
+   own (Manage Categories' close button relies on .expense-detail-
+   sheet for that) — scoped here rather than added to .bottom-sheet
+   itself, so every other plain-shell sheet (Budget, Custom Range,
+   Add/Delete Category) is completely unaffected. */
+#backup-restore-sheet {
+  position: relative;
+  padding-top: var(--space-6);
+}
+
+.backup-restore-action {
+  width: 100%;
+  text-align: left;
+}
+
+/* Icon + label for the Settings row itself (Analytics/Manage
+   Categories only need the plain <span> they already use). */
+.settings-section-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}/* ================================================================
+   PEBBLE — style.css
+   Premium minimal expense tracker.
+   Design language: Apple HIG-inspired. Dark, calm, uncluttered.
+   ================================================================ */
+
+
+/* ================================================================
+   1. RESET
+   ================================================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  scroll-behavior: smooth;
+  color-scheme: dark;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+
+  /* App-wide default: Pebble should feel like a native app, not a
+     web page — no accidental text selection, no mobile tap-highlight
+     flash, no iOS text-callout ("Copy/Look Up") bubble. `user-select`
+     is inherited, so this one rule covers every button, card, chip,
+     icon, and label without needing a repeated rule per component
+     (see the input/textarea override below for the exceptions). */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+input {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+}
+
+/* Exceptions to the body-level "no selection" default above.
+   Every actual/future editable field (amount, note, budget, custom
+   date range, and any control added later) keeps normal text
+   selection and the native iOS callout ("Copy/Paste/Select") — the
+   two things users legitimately expect inside a field they can type
+   into. `select` and `[contenteditable]` are included so this stays
+   correct if either is ever introduced without a new selection rule. */
+input,
+textarea,
+select,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
+ul {
+  list-style: none;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+img, svg, canvas {
+  display: block;
+  max-width: 100%;
+}
+
+
+/* ================================================================
+   2. VARIABLES
+   ================================================================ */
+
+:root {
+  /* ---- Core colors ---- */
+  --color-bg: #000000;
+  --color-card: #111111;
+  --color-surface: #181818;
+  --color-border: #242424;
+
+  --color-text-primary: #FFFFFF;
+  --color-text-secondary: #A1A1AA;
+  --color-text-disabled: #6B7280;
+
+  --color-success: #22C55E;
+  --color-warning: #FACC15;
+  --color-danger: #EF4444;
+
+  /* ---- Category colors ---- */
+  --category-food: #F97316;          /* Orange */
+  --category-transport: #3B82F6;     /* Blue */
+  --category-shopping: #FACC15;      /* Yellow */
+  --category-health: #22C55E;        /* Green */
+  --category-college: #A855F7;       /* Purple */
+  --category-hostel: #06B6D4;        /* Cyan */
+  --category-entertainment: #EC4899; /* Pink */
+  --category-others: #9CA3AF;        /* Gray */
+
+  /* ---- Typography ---- */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text',
+                 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+
+  --font-size-app-title: 38px;
+  --font-size-section-title: 20px;
+  --font-size-card-label: 14px;
+  --font-size-card-amount: 36px;
+  --font-size-body: 16px;
+  --font-size-small: 13px;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* ---- Spacing (8px system) ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 32px;
+  --space-6: 40px;
+  --space-7: 48px;
+
+  /* ---- Radius ---- */
+  --radius-card: 20px;
+  --radius-button: 16px;
+  --radius-fab: 50%;
+  --radius-sheet: 28px;
+  --radius-input: 16px;
+
+  /* ---- Motion ---- */
+  --transition-fast: 180ms ease;
+  --transition-base: 220ms ease;
+
+  /* ---- Layout ---- */
+  --max-content-width: 480px;
+  --fab-size: 64px;
+}
+
+
+/* ================================================================
+   3. BASE
+   ================================================================ */
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-regular);
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+h1, h2, h3 {
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.2;
+}
+
+::selection {
+  background: #FFFFFF;
+  color: #000000;
+}
+
+/* Hide scrollbars while keeping scroll functional */
+body,
+#expense-history {
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;     /* IE / Edge */
+}
+
+body::-webkit-scrollbar,
+#expense-history::-webkit-scrollbar {
+  display: none;                /* Chrome / Safari */
+}
+
+
+/* ================================================================
+   4. LAYOUT
+   ================================================================ */
+
+.screen {
+  width: 100%;
+  max-width: var(--max-content-width);
+  margin: 0 auto;
+  min-height: 100vh;
+  padding:
+    max(var(--space-4), env(safe-area-inset-top))
+    var(--space-3)
+    max(var(--space-7), env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  position: relative;
+}
+
+.screen-hidden {
+  display: none;
+}
+
+/* Center the app on tablets and desktops */
+@media (min-width: 481px) {
+  body {
+    background:#000000;
+  }
+
+  .screen {
+    border-left: 1px solid var(--color-border);
+    border-right: 1px solid var(--color-border);
+    min-height: 100vh;
+  }
+}
+
+
+/* ================================================================
+   5. CARDS
+   ================================================================ */
+
+.card {
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.card-label {
+  font-size: var(--font-size-card-label);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  letter-spacing: 0.2px;
+}
+
+.card-amount {
+  font-size: var(--font-size-card-amount);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -0.5px;
+}
+
+/* Remaining Budget card doubles as a tap target for the bottom sheet */
+#remaining-budget-card {
+  cursor: pointer;
+  transition: background-color var(--transition-fast), transform var(--transition-fast);
+}
+
+#remaining-budget-card:hover {
+  background-color: var(--color-surface);
+}
+
+#remaining-budget-card:active {
+  transform: scale(0.98);
+}
+
+#remaining-budget-card:focus-visible {
+  outline: 2px solid var(--color-text-primary);
+  outline-offset: 2px;
+}
+
+.progress-track {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background-color: var(--color-surface);
+  margin-top: var(--space-2);
+}
+
+.progress-fill {
+  height: 100%;
+  width: 0%;
+  background-color: var(--color-success);
+  border-radius: 999px;
+  transition: width var(--transition-base);
+}
+.progress-segment {
+  height: 100%;
+  transition:
+    width var(--transition-base),
+    background-color var(--transition-base);
+}
+
+/* Category Summary */
+.category-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+/* Chart container */
+#chart-container {
+  padding: var(--space-4);
+  min-height: 220px;
+  align-items: stretch;
+  justify-content: center;
+}
+
+#spending-chart {
+  width: 100% !important;
+  max-height: 260px;
+}
+
+
+/* ================================================================
+   6. HEADER
+   ================================================================ */
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) 0;
+}
+
+.app-title {
+  font-size: var(--font-size-app-title);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -0.5px;
+}
+
+.add-expense-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+}
+
+.add-expense-title {
+  font-size: var(--font-size-section-title);
+  font-weight: var(--font-weight-semibold);
+}
+
+
+/* ================================================================
+   7. BUTTONS
+   ================================================================ */
+
+/* -- Back button -- */
+.back-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background-color: var(--color-surface);
+  transition: background-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.back-btn:hover {
+  background-color: var(--color-border);
+}
+
+.back-btn:active {
+  transform: scale(0.92);
+}
+
+.back-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+/* -- Filter row wrapper (positions the scroll hint chevron) -- */
+.filters-wrapper {
+  position: relative;
+}
+
+/* -- Filter buttons (segmented chips) -- */
+.filters {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  padding-bottom: var(--space-1);
+  scrollbar-width: none;
+}
+
+.filters::-webkit-scrollbar {
+  display: none;
+}
+
+/* -- Scroll hint chevron: hints that "Custom" is off-screen -- */
+.filters-scroll-hint {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: var(--space-1);
+  width: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 2px;
+  border: none;
+  background: linear-gradient(to right, transparent, var(--color-bg) 65%);
+  color: var(--color-text-secondary);
+  opacity: 1;
+  transition: opacity var(--transition-fast);
+  pointer-events: none;
+}
+
+.filters-scroll-hint.is-visible {
+  pointer-events: auto;
+}
+
+.filters-scroll-hint.is-hidden {
+  opacity: 0;
+}
+
+.filter-btn {
+  flex: 0 0 auto;
+  padding: var(--space-2) var(--space-3);
+  border-radius: 999px;
+  background-color: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  border: 1px solid transparent;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.filter-btn:hover {
+  background-color: var(--color-border);
+}
+
+.filter-btn-active,
+.filter-btn[aria-current="true"] {
+  background-color: var(--color-text-primary);
+  color: #000000;
+  font-weight: var(--font-weight-semibold);
+}
+
+/* -- Filter subtitle (Phase 7.6) -- */
+.filter-description {
+  font-size: var(--font-size-small);
+  color: var(--color-text-secondary);
+  padding: 0 var(--space-1);
+}
+
+/* -- Filter total summary (PHASE A — Filter Total Summary) --
+   Sits directly above #expense-history-list; same small/secondary
+   text treatment as .filter-description, with only the amount
+   promoted to the primary text color + semibold weight (matching
+   .expense-amount) so it reads as the one number that matters. */
+.filter-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0 var(--space-1);
+  margin-bottom: var(--space-2);
+  font-size: var(--font-size-small);
+  color: var(--color-text-secondary);
+}
+
+.filter-summary-amount {
+  flex: 0 0 auto;
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Same fix as .empty-state[hidden] etc. above: .filter-summary's
+   own display:flex has equal specificity to the [hidden]
+   attribute selector and wins by source order, so without this
+   the element stays visible even when hidden is set. */
+.filter-summary[hidden] {
+  display: none;
+}
+
 /* -- Search bar (TASK 9) --
    Same dark card background/radius as .card, deliberately without
    .card's border — spec calls for no border, no shadow, no glow.

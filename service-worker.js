@@ -9,7 +9,7 @@
 // behind as a harmless but stale orphan entry.)
 // =====================================================
 
-const CACHE_NAME = "pebble-v1.8.2";
+const CACHE_NAME = "pebble-v1.9.1";
 
 const STATIC_ASSETS = [
   "./",
