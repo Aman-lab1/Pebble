@@ -2555,6 +2555,200 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
   /* ================================================================
+     5.5 EXPENSE EXPRESSION ENGINE (v1.9.2 — Phase B1)
+     Turns a typed amount — a plain number or a simple +/-/×/÷
+     expression — into the single numeric value the rest of Pebble
+     already expects on expense.amount. This section is calculation
+     only; it has no idea an input field or keypad exists, and knows
+     nothing about the DOM. Phase B2 is what will actually let
+     someone type "100 + 240" into the Add Expense screen and wire
+     ×/÷ buttons to it.
+
+     No eval() or Function() anywhere below — expressions are
+     tokenized and evaluated by hand, in three pure steps:
+       tokenizeExpenseExpression() -> tokens, or null the moment it
+         hits a character it doesn't recognize (letters, %, ^,
+         parentheses, a second '.' inside one number, etc.)
+       isWellFormedExpenseTokens() -> true only for a token list
+         that reads number, operator, number, ..., number — no
+         leading/trailing operator, no back-to-back operators, and
+         never empty.
+       evaluateExpenseTokens() -> the numeric result, applying ×/÷
+         before +/-, left-to-right within each precedence level;
+         null if any division by zero is attempted.
+     evaluateExpenseExpression() composes those three into one
+     pass/fail result and is the only function this section is
+     built for calling from outside it.
+
+     Intermediate arithmetic is left at full float precision on
+     purpose — rounding only happens once, at the same
+     roundToTwoDecimals() call the form submission handler already
+     made before this phase, so this doesn't change when or how
+     stored amounts get normalized.
+     ================================================================ */
+
+  /**
+   * Every character Pebble's expression syntax accepts, mapped to
+   * its internal single-character operator. '*' and '/' are
+   * accepted alongside the display glyphs '×' and '÷' so a
+   * plain-ASCII expression evaluates identically to one typed via a
+   * future ×/÷ button.
+   */
+  const EXPENSE_OPERATORS = new Map([
+    ['+', '+'],
+    ['-', '-'],
+    ['*', '*'],
+    ['×', '*'],
+    ['/', '/'],
+    ['÷', '/']
+  ]);
+
+  /**
+   * Splits a raw expression string into number/operator tokens.
+   * Whitespace between tokens is ignored. Returns null the instant
+   * an unrecognized character shows up — a letter, '%', '^', a
+   * parenthesis, or a second '.' inside one number — so tokenizing
+   * never partially succeeds on a malformed string.
+   * @param {string} expression
+   * @returns {Array<{type: 'number', value: number}|{type: 'operator', value: ('+'|'-'|'*'|'/')}> | null}
+   */
+  function tokenizeExpenseExpression(expression) {
+    const tokens = [];
+    let numberBuffer = '';
+    let sawDecimalPoint = false;
+
+    const flushNumber = () => {
+      if (numberBuffer === '' || numberBuffer === '.') return false;
+      tokens.push({ type: 'number', value: Number(numberBuffer) });
+      numberBuffer = '';
+      sawDecimalPoint = false;
+      return true;
+    };
+
+    for (const char of expression) {
+      if (char === ' ' || char === '\t') {
+        if (numberBuffer !== '' && !flushNumber()) return null;
+        continue;
+      }
+      if (char >= '0' && char <= '9') {
+        numberBuffer += char;
+        continue;
+      }
+      if (char === '.') {
+        if (sawDecimalPoint) return null;
+        sawDecimalPoint = true;
+        numberBuffer += char;
+        continue;
+      }
+      if (EXPENSE_OPERATORS.has(char)) {
+        if (numberBuffer !== '' && !flushNumber()) return null;
+        tokens.push({ type: 'operator', value: EXPENSE_OPERATORS.get(char) });
+        continue;
+      }
+      // Anything else — letters, '%', '^', parentheses, etc. — is
+      // rejected outright rather than silently skipped.
+      return null;
+    }
+
+    if (numberBuffer !== '' && !flushNumber()) return null;
+    return tokens;
+  }
+
+  /**
+   * Confirms a token list reads as number, operator, number,
+   * operator, ..., number with nothing else. Rejects an empty list,
+   * a leading or trailing operator, and back-to-back operators —
+   * together these catch every malformed case Phase B1 needs to
+   * reject ("100 +", "+ 100", "100 ++ 20", "100 × ÷ 2").
+   * @param {Array<{type: string}>} tokens
+   * @returns {boolean}
+   */
+  function isWellFormedExpenseTokens(tokens) {
+    if (tokens.length === 0) return false;
+    if (tokens.length % 2 === 0) return false; // must start and end on a number
+    return tokens.every((token, index) => {
+      const expectedType = index % 2 === 0 ? 'number' : 'operator';
+      return token.type === expectedType;
+    });
+  }
+
+  /**
+   * Evaluates an already-validated token list, applying every × and
+   * ÷ left-to-right first, then every + and - left-to-right across
+   * what's left — normal operator precedence, not a flat
+   * left-to-right scan. Division by zero returns null instead of
+   * Infinity/-Infinity/NaN. Assumes isWellFormedExpenseTokens() has
+   * already passed; it does not re-check structure.
+   * @param {Array<{type: string, value: (number|string)}>} tokens
+   * @returns {number | null}
+   */
+  function evaluateExpenseTokens(tokens) {
+    // Pass 1: collapse every × and ÷ into its result, left-to-right,
+    // leaving only numbers separated by + and - behind.
+    const reduced = [tokens[0]];
+    for (let i = 1; i < tokens.length; i += 2) {
+      const operator = tokens[i].value;
+      const nextValue = tokens[i + 1].value;
+
+      if (operator === '*' || operator === '/') {
+        const previous = reduced.pop();
+        if (operator === '/' && nextValue === 0) return null;
+        const result = operator === '*'
+          ? previous.value * nextValue
+          : previous.value / nextValue;
+        reduced.push({ type: 'number', value: result });
+      } else {
+        reduced.push(tokens[i], { type: 'number', value: nextValue });
+      }
+    }
+
+    // Pass 2: apply + and - left-to-right across what's left.
+    let total = reduced[0].value;
+    for (let i = 1; i < reduced.length; i += 2) {
+      const operator = reduced[i].value;
+      const nextValue = reduced[i + 1].value;
+      total = operator === '+' ? total + nextValue : total - nextValue;
+    }
+    return total;
+  }
+
+  /**
+   * Turns a typed amount — "100", "99.50", or an expression like
+   * "100 + 240 - 90" — into the single number Pebble stores as
+   * expense.amount. Phase B2 will point the amount field and its
+   * future ×/÷ buttons at this function; for Phase B1 it's already
+   * a drop-in replacement for the plain parseFloat() the Add/Edit
+   * Expense form used before this phase, so a plain number behaves
+   * exactly as it always did:
+   * evaluateExpenseExpression("430") -> { isValid: true, value: 430 },
+   * the same result parseFloat("430") produced.
+   *
+   * Never throws and never runs arbitrary code — there's no eval()
+   * or Function() anywhere in this engine. Malformed input, a stray
+   * letter, back-to-back operators, division by zero, or a
+   * non-finite result all come back as { isValid: false, value: null }
+   * rather than letting NaN/Infinity reach an expense. Whether the
+   * resulting number is an acceptable expense amount (positive,
+   * non-zero) is deliberately NOT this function's job — that
+   * decision stays with the form's existing validation, unchanged.
+   * @param {string} expression
+   * @returns {{isValid: true, value: number} | {isValid: false, value: null}}
+   */
+  function evaluateExpenseExpression(expression) {
+    const INVALID = { isValid: false, value: null };
+    if (typeof expression !== 'string') return INVALID;
+
+    const tokens = tokenizeExpenseExpression(expression.trim());
+    if (!tokens || !isWellFormedExpenseTokens(tokens)) return INVALID;
+
+    const result = evaluateExpenseTokens(tokens);
+    if (result === null || !Number.isFinite(result)) return INVALID;
+
+    return { isValid: true, value: result };
+  }
+
+
+  /* ================================================================
      6. NAVIGATION (PHASE 1)
      ================================================================ */
 
@@ -3656,7 +3850,14 @@ document.addEventListener('DOMContentLoaded', () => {
   addExpenseForm.addEventListener('submit', (event) => {
     event.preventDefault();
 
-    const amountValue = parseFloat(amountInput.value);
+    // Phase B1: the amount field still only ever contains a plain
+    // number today (native type="number", '+'/'-' keys blocked at
+    // keydown), so this behaves exactly like parseFloat() did
+    // before — but it's now the same expression-aware path Phase B2
+    // will point its future ×/÷ buttons at, with no change needed
+    // here when that lands.
+    const expressionResult = evaluateExpenseExpression(amountInput.value);
+    const amountValue = expressionResult.isValid ? expressionResult.value : NaN;
     const categoryValue = categoryHiddenInput.value;
     const paymentMethodValue = paymentMethodHiddenInput.value;
 
