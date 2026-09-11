@@ -1,6 +1,6 @@
 /* ================================================================
     PEBBLE
-    Version 0.9.1
+    Version 1.9.3
     (Displayed in-app as "Version 1.0" — see the Settings panel
     footer. The visible version is the public release number and
     is intentionally decoupled from this internal dev version.)
@@ -2317,6 +2317,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const addExpenseTitle = document.getElementById('add-expense-title');
   const saveExpenseBtn = document.getElementById('save-expense-btn');
   const amountInput = document.getElementById('expense-amount-input');
+  const amountOperatorButtons = document.querySelectorAll('.amount-operator-btn');
   const categorySelector = document.getElementById('category-selector');
   const categoryHiddenInput = document.getElementById('expense-category-input');
   const noteInput = document.getElementById('expense-note-input');
@@ -2897,19 +2898,66 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
   /* ================================================================
-     8. AMOUNT INPUT VALIDATION (PHASE 2)
+     7C. AMOUNT EXPRESSION OPERATORS (v1.9.3 — Phase B2)
+     Wires the four +/−/×/÷ buttons added under the amount input.
+     Every character this row can insert is one B1's engine already
+     understands — evaluateExpenseExpression() (section 5.5) treats
+     '×'/'÷' identically to '*'/'/', so the glyphs are inserted as-is
+     rather than converted, which is also what lets the field display
+     them the way Phase B2 asks for. EXPENSE_OPERATORS (also section
+     5.5) is reused directly as the single source of truth for "is
+     this character an operator" everywhere below, instead of a
+     second hardcoded list drifting out of sync with the engine.
+     ================================================================ */
+
+  /**
+   * Appends an operator to the amount field, or — if the field
+   * already ends in one — replaces that trailing operator instead of
+   * stacking a second one (tapping × right after + turns "100+" into
+   * "100×", not "100+×"). Does nothing on an empty field: a leading
+   * operator is never valid (isWellFormedExpenseTokens(), section
+   * 5.5, requires the expression to start on a number), so there's
+   * nothing yet to attach one to.
+   * Fires a synthetic 'input' event afterward so the existing
+   * negative-value guard below still runs against the result, then
+   * returns focus to the field so the keyboard (mobile) or typing
+   * flow (desktop) isn't interrupted.
+   * @param {string} operator - one of '+', '-', '×', '÷'
+   */
+  function appendExpenseOperator(operator) {
+    const currentValue = amountInput.value;
+    if (currentValue === '') return;
+
+    const lastChar = currentValue.slice(-1);
+    amountInput.value = EXPENSE_OPERATORS.has(lastChar)
+      ? currentValue.slice(0, -1) + operator
+      : currentValue + operator;
+
+    amountInput.dispatchEvent(new Event('input', { bubbles: true }));
+    amountInput.focus();
+  }
+
+  amountOperatorButtons.forEach((btn) => {
+    btn.addEventListener('click', () => appendExpenseOperator(btn.dataset.operator));
+  });
+
+
+  /* ================================================================
+     8. AMOUNT INPUT VALIDATION (PHASE 2 + v1.9.3 PHASE B2)
      ================================================================ */
 
   /**
    * Blocks the keystrokes that let a native number input accept
    * scientific notation or an explicit sign ('e', 'E', '+', '-').
-   * Pebble doesn't support scientific notation, so these are
-   * rejected at the keyboard level — before they ever reach the
-   * field's value. Digits, the decimal point, backspace, delete,
-   * arrow keys, tab, and modifier-key combos (copy/paste/select
-   * all) are untouched, since none of them match this key list.
-   * This is the first of three validation layers (keydown -> input
-   * -> submit); it's a UX improvement, not the only guard.
+   * Budget-only as of v1.9.3 — the amount field has its own
+   * expression-aware guard below (blockInvalidExpenseKeys()), since
+   * it now needs to allow '+'/'-' as expression operators, which
+   * this stricter budget-only version still rejects outright.
+   * Digits, the decimal point, backspace, delete, arrow keys, tab,
+   * and modifier-key combos (copy/paste/select all) are untouched,
+   * since none of them match this key list. First of three
+   * validation layers (keydown -> input -> submit) for the budget
+   * field; a UX improvement, not the only guard.
    * @param {KeyboardEvent} event
    */
   function blockScientificNotationKeys(event) {
@@ -2918,14 +2966,76 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  amountInput.addEventListener('keydown', blockScientificNotationKeys);
   budgetAmountInput.addEventListener('keydown', blockScientificNotationKeys);
+
+  /**
+   * Returns the digits/decimal-point run immediately before the
+   * caret, up to (but not including) the nearest operator to its
+   * left — i.e. whichever number segment is currently being typed.
+   * Used only to check whether that segment already has a '.' before
+   * a second one is allowed in.
+   * @param {string} value
+   * @param {number} caretPos
+   * @returns {string}
+   */
+  function getCurrentNumberSegment(value, caretPos) {
+    const upToCaret = value.slice(0, caretPos);
+    let segmentStart = 0;
+    for (let i = upToCaret.length - 1; i >= 0; i--) {
+      if (EXPENSE_OPERATORS.has(upToCaret[i])) {
+        segmentStart = i + 1;
+        break;
+      }
+    }
+    return upToCaret.slice(segmentStart);
+  }
+
+  /**
+   * Expression-aware counterpart to blockScientificNotationKeys()
+   * above, for the amount field only (v1.9.3 — Phase B2). The
+   * accepted character set is now digits, one decimal point per
+   * number segment, and the operators EXPENSE_OPERATORS (section
+   * 5.5) recognizes — everything else, including 'e'/'E', is
+   * rejected at the keyboard exactly as it always was. A leading
+   * operator is blocked too, since an expression can never start
+   * with one (isWellFormedExpenseTokens(), section 5.5). Control/
+   * navigation keys and modifier-key combos (copy/paste/select all,
+   * etc.) are left untouched, same as the budget field's guard.
+   * @param {KeyboardEvent} event
+   */
+  function blockInvalidExpenseKeys(event) {
+    if (event.ctrlKey || event.metaKey || event.key.length > 1) return;
+
+    const isDigit = event.key >= '0' && event.key <= '9';
+    const isDecimalPoint = event.key === '.';
+    const isOperator = EXPENSE_OPERATORS.has(event.key);
+
+    if (!isDigit && !isDecimalPoint && !isOperator) {
+      event.preventDefault();
+      return;
+    }
+
+    const caretPos = amountInput.selectionStart ?? amountInput.value.length;
+
+    if (isOperator && caretPos === 0) {
+      event.preventDefault(); // no leading operator
+      return;
+    }
+
+    if (isDecimalPoint && getCurrentNumberSegment(amountInput.value, caretPos).includes('.')) {
+      event.preventDefault(); // only one '.' per number segment
+    }
+  }
+
+  amountInput.addEventListener('keydown', blockInvalidExpenseKeys);
 
   /**
    * Strips a pasted string down to digits and at most one decimal
    * point. Anything else — 'e'/'E', '+', '-', letters, symbols — is
    * discarded rather than repaired into a "closest valid" number,
-   * so a paste like "1e5" becomes "15", not "100000".
+   * so a paste like "1e5" becomes "15", not "100000". Budget-only as
+   * of v1.9.3 — see sanitizeExpensePaste() below for the amount
+   * field's broader, expression-aware version.
    * @param {string} rawText
    * @returns {string}
    */
@@ -2947,6 +3057,8 @@ document.addEventListener('DOMContentLoaded', () => {
    * the selected range, mirroring normal paste behavior, then fires
    * a synthetic 'input' event so the existing negative-value guard
    * still runs against the result — this doesn't bypass that layer.
+   * Budget-only as of v1.9.3 — see handleExpensePaste() below for
+   * the amount field.
    * @param {ClipboardEvent} event
    */
   function handleNumericPaste(event) {
@@ -2965,14 +3077,62 @@ document.addEventListener('DOMContentLoaded', () => {
     input.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
-  amountInput.addEventListener('paste', handleNumericPaste);
   budgetAmountInput.addEventListener('paste', handleNumericPaste);
 
   /**
-   * Prevents negative values from ever sitting in the amount field.
-   * Zero/empty is still allowed at this stage; final enforcement
-   * of ">0" happens on save. Second validation layer, behind the
-   * keydown guard above and ahead of the submit-time check below.
+   * Paste counterpart to blockInvalidExpenseKeys() above, for the
+   * amount field only (v1.9.3 — Phase B2). Strips a pasted string
+   * down to digits, decimal points, and whatever EXPENSE_OPERATORS
+   * (section 5.5) recognizes as an operator — the same accepted
+   * alphabet typing is already held to, so a paste can't slip past
+   * what the keydown guard blocks. Deeper malformation (a leading
+   * operator, two operators in a row, more than one '.' in a number)
+   * is left for evaluateExpenseExpression() to reject at submit,
+   * same as it always has for typed input.
+   * @param {string} rawText
+   * @returns {string}
+   */
+  function sanitizeExpensePaste(rawText) {
+    return Array.from(rawText)
+      .filter((char) => (char >= '0' && char <= '9') || char === '.' || EXPENSE_OPERATORS.has(char))
+      .join('');
+  }
+
+  /**
+   * Paste handler for the amount field (v1.9.3 — Phase B2). Same
+   * shape as handleNumericPaste() above — replace the selected range
+   * with the sanitized text, then fire a synthetic 'input' event so
+   * the negative-value guard below still runs.
+   * @param {ClipboardEvent} event
+   */
+  function handleExpensePaste(event) {
+    event.preventDefault();
+    const clipboardText = (event.clipboardData || window.clipboardData).getData('text');
+    const sanitized = sanitizeExpensePaste(clipboardText);
+    if (sanitized === '') return;
+
+    const start = amountInput.selectionStart ?? amountInput.value.length;
+    const end = amountInput.selectionEnd ?? amountInput.value.length;
+    amountInput.value = amountInput.value.slice(0, start) + sanitized + amountInput.value.slice(end);
+
+    const cursorPos = start + sanitized.length;
+    amountInput.setSelectionRange(cursorPos, cursorPos);
+    amountInput.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  amountInput.addEventListener('paste', handleExpensePaste);
+
+  /**
+   * Prevents a value starting with '-' from ever sitting in the
+   * amount field (e.g. a pasted "-50" slipping past
+   * sanitizeExpensePaste(), which allows '-' as an operator
+   * character wherever it appears). Number(value) is NaN for any
+   * genuine expression ("100-50", "100+240"), so this only ever
+   * fires on a literal leading negative number — it does not affect
+   * valid expressions. Zero/empty is still allowed at this stage;
+   * final enforcement of ">0" happens on save. Second validation
+   * layer, behind the keydown guard above and ahead of the
+   * submit-time check below.
    */
   amountInput.addEventListener('input', () => {
     if (amountInput.value !== '' && Number(amountInput.value) < 0) {

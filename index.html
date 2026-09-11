@@ -201,23 +201,37 @@
     <!-- ==================== ADD EXPENSE FORM ==================== -->
     <form id="add-expense-form" novalidate>
 
-      <!-- Native Amount Input (type="number" with decimal support) -->
+      <!-- Amount Input (v1.9.3 — Phase B2: type="text" so it can hold
+           an expression like "100+240"; inputmode="decimal" still
+           hints a numeric keyboard on mobile. Digit/decimal entry and
+           backspace continue to rely on the native keyboard/text
+           editing exactly as before — only the type attribute and
+           the operator row below it are new. -->
       <div class="amount-input-wrap">
         <span class="currency-symbol">₹</span>
         <input
-          type="number"
+          type="text"
           id="expense-amount-input"
           name="amount"
           class="amount-input"
           inputmode="decimal"
           enterkeyhint="done"
-          step="0.01"
-          min="0"
           placeholder="0"
           required
           autocomplete="off"
           aria-label="Expense amount"
         >
+      </div>
+
+      <!-- Expression Operator Row (v1.9.3 — Phase B2). Exactly four
+           operators, sitting directly under the amount input. Real
+           <button> elements with accessible names beyond their glyph,
+           since '+', '−', '×', '÷' alone aren't reliably announced. -->
+      <div class="amount-operator-row" role="group" aria-label="Expression operators">
+        <button type="button" class="amount-operator-btn" data-operator="+" aria-label="Add">+</button>
+        <button type="button" class="amount-operator-btn" data-operator="-" aria-label="Subtract">−</button>
+        <button type="button" class="amount-operator-btn" data-operator="×" aria-label="Multiply">×</button>
+        <button type="button" class="amount-operator-btn" data-operator="÷" aria-label="Divide">÷</button>
       </div>
 
       <!--

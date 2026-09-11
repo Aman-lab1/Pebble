@@ -678,6 +678,43 @@ body::-webkit-scrollbar,
   appearance: none;
 }
 
+/* -- Expression operator row (v1.9.3 — Phase B2). Sits directly
+   under the amount input. Buttons reuse the circular .icon-btn
+   shell/interaction (surface fill, border-tinted hover, scale-down
+   active) at a slightly larger, easier-to-tap size, so they read as
+   calculator keys without introducing a new visual language. -- */
+.amount-operator-row {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: 0 var(--space-3) var(--space-3);
+}
+
+.amount-operator-btn {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+  font-size: 20px;
+  font-weight: var(--font-weight-medium);
+  line-height: 1;
+  transition: background-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.amount-operator-btn:hover {
+  background-color: var(--color-border);
+}
+
+.amount-operator-btn:active {
+  transform: scale(0.92);
+}
+
 /* -- Section title (used above sub-groups inside a form, e.g. the
    Payment Method selector below the Category selector). Reuses the
    same visual language as .card-label rather than introducing a new
