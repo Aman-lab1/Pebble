@@ -3549,6 +3549,19 @@ document.addEventListener('DOMContentLoaded', () => {
    * only fills completely once the whole budget is used. Unused
    * budget is simply the untouched track background; no "empty"
    * element is needed.
+   *
+   * v1.9.3 — Phase C: category.percentOfBudget (calculateDashboardData())
+   * is deliberately left unclamped there — it's the real
+   * amount/budget ratio for that category, and nothing outside this
+   * function reads it. Because segments are stacked left to right,
+   * clamping each one to <= 100 individually isn't enough: two
+   * categories at 60% each would each pass that check yet still sum
+   * to 120% of the track. So the running total of width already laid
+   * down is tracked here instead, and every segment is capped to
+   * whatever room is visually left — once the bar is full, later
+   * segments render at 0% width. totalSpent/remainingBudget/
+   * overspending are computed from the real, unclamped amounts
+   * elsewhere and are untouched by this — only the pixels are capped.
    * @param {ReturnType<typeof calculateDashboardData>} dashboardData
    */
   function renderProgressBar(dashboardData) {
@@ -3558,14 +3571,19 @@ document.addEventListener('DOMContentLoaded', () => {
     budgetProgressTrack.style.whiteSpace = 'nowrap';
     budgetProgressTrack.style.fontSize = '0';
 
+    let visualWidthRemaining = 100;
+
     dashboardData.categoryBreakdown.forEach((category) => {
+      const visualWidth = Math.max(Math.min(category.percentOfBudget, visualWidthRemaining), 0);
+      visualWidthRemaining -= visualWidth;
+
       const segment = document.createElement('span');
       segment.className = 'progress-segment';
       segment.dataset.category = category.id;
       segment.style.display = 'inline-block';
       segment.style.height = '100%';
       segment.style.verticalAlign = 'top';
-      segment.style.width = `${category.percentOfBudget}%`;
+      segment.style.width = `${visualWidth}%`;
       segment.style.backgroundColor = getCategoryColor(category.id);
       budgetProgressTrack.appendChild(segment);
     });
