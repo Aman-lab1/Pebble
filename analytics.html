@@ -43,11 +43,10 @@
 
   <!-- ============================================================
        SCREEN: ANALYTICS
-       Reached only via Settings -> Analytics. Task 1 (Analytics
-       Foundation) — structure and navigation only. Every section
-       below is an empty placeholder with a permanent, stable id;
-       charts, calculations, month navigation and insights are
-       implemented in later tasks directly against these same ids.
+      Reached via Settings -> Analytics. Each section below provides
+      stable markup for the month navigation, summary, trend chart,
+      calendar, breakdowns, statistics, and spending insight views;
+      script.js supplies their current data and rendering.
        ============================================================ -->
   <main id="analytics-screen" class="screen" aria-label="Analytics">
 
@@ -109,7 +108,7 @@
     </section>
 
     <!-- ==================== SPENDING CALENDAR ====================
-         v1.8 PHASE B. Read-only monthly calendar for
+         v1.9.6 PHASE B. Read-only monthly calendar for
          analyticsSelectedMonth (script.js, calculateSpendingCalendar()/
          renderSpendingCalendar()). No month controls of its own — it
          reads the exact same analyticsSelectedMonth state as the main
@@ -119,8 +118,8 @@
          (Monday-first, matching the project's date conventions); the
          day grid itself is injected by script.js. Cells with spending
          carry a relative intensity level (script.js,
-         calculateSpendingCalendar()) — no tap-to-open, that's a later
-         phase. -->
+         calculateSpendingCalendar()) — cells with spending open the
+         read-only daily detail sheet. -->
     <section id="analytics-calendar-card" class="card" aria-label="Spending Calendar">
       <p class="card-label">Spending Calendar</p>
 
@@ -266,7 +265,7 @@
   </main>
 
   <!-- ============================================================
-       DAY DETAIL BOTTOM SHEET (v1.8 PHASE C)
+      DAY DETAIL BOTTOM SHEET (v1.9.6 PHASE C)
        Opens when a spending day in the Spending Calendar above is
        tapped. Read-only — reuses the exact same .sheet-overlay /
        .bottom-sheet / .expense-detail-sheet / .expense-detail-

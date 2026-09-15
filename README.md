@@ -38,19 +38,20 @@ Your data stays on your device.
 
 ### 💸 Expense Tracking
 
-- Quick expense logging
+- Quick expense logging with plain amounts or `+`, `-`, `×`, and `÷` expressions
 - Edit & delete expenses
 - Read-only Expense Detail Sheet
 - Search expenses by category, note, payment method, or amount
-- Dynamic categories
+- Add and delete custom categories; protected fallback category keeps orphaned expenses valid
 - Cash & Digital payment tracking
 - Remembers your last payment method
+- LocalStorage persistence with validation when saved data is loaded
 
 ### 📊 Dashboard
 
 - Monthly budget tracking
-- Budget remaining indicator
-- Average daily spending
+- Budget remaining indicator and capped visual progress bar
+- Budget alerts at configured spending thresholds
 - Spending distribution
 - Category rankings
 - Monthly spending charts
@@ -60,9 +61,9 @@ Your data stays on your device.
 
 - Monthly navigation
 - Monthly Summary Cards
-- Daily Spending Trend
-- Spending Calendar
-- Calendar-based spending intensity visualization
+- Daily Spending Trend with zero-spending days represented
+- Average daily spending based on elapsed days for the current month and all calendar days for past months
+- Spending Calendar with Monday-first layout, relative intensity levels, legend, and read-only day details
 - Spending intensity legend
 - Category Breakdown
 - Payment Method Breakdown
@@ -72,19 +73,7 @@ Your data stays on your device.
 
 ### 🗓 Spending Calendar
 
-Pebble's Analytics calendar provides a visual way to understand spending across a month.
-
-- Full monthly calendar view
-- Daily spending visualization
-- Low / Medium / High spending intensity
-- Visual intensity indicators instead of cluttered currency values
-- Clear spending legend
-- Interactive spending days
-- Read-only daily expense details
-- Daily total and individual expense breakdown
-- Month navigation through the main Analytics navigation
-
-The calendar is designed for **visual discovery rather than editing** — helping users notice spending patterns that are harder to recognize from a simple weekly or monthly number.
+The Analytics calendar follows the selected month in a Monday-first grid. Spending days show relative Low, Medium, or High intensity and can be opened for a read-only date-specific expense breakdown. Empty days remain non-interactive; the calendar never edits expenses.
 
 ### 🔍 Filters & Search
 
@@ -94,15 +83,14 @@ The calendar is designed for **visual discovery rather than editing** — helpin
 - Year
 - All Time
 - Custom Date Range
-- Instant expense search
+- Instant case-insensitive search within the active date-filtered results
 
 ### 📤 Utilities
 
 - CSV Export
+- Complete JSON backup and validated restore for expenses, categories, budget, payment method, and budget-alert state
 - Native success confirmations
-- Offline-first architecture
-- Progressive Web App
-- Local-first storage
+- Offline-first PWA with LocalStorage and a service worker
 
 ---
 
@@ -117,7 +105,7 @@ Once installed it behaves like a native mobile application:
 - Portrait layout
 - Offline support
 - Fast startup
-- Automatic updates
+- Network-first HTML navigation with cached static assets for offline fallback
 
 ---
 
@@ -183,7 +171,7 @@ Pebble will now launch as a standalone app from your Home Screen.
 
 # 📦 Current Version
 
-## Pebble v1.8.0
+## Pebble v1.9.6
 
 ### What's New
 

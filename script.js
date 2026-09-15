@@ -1,9 +1,8 @@
 /* ================================================================
     PEBBLE
-    Version 1.9.3
-    (Displayed in-app as "Version 1.0" — see the Settings panel
-    footer. The visible version is the public release number and
-    is intentionally decoupled from this internal dev version.)
+    Version 1.9.5
+    The Settings panel footer displays the public application version.
+    The service worker maintains its own cache namespace.
 
     Features
     ✔ Navigation
@@ -12,7 +11,7 @@
     ✔ Expense Rendering
     ✔ UI Menus
     ✔ Dashboard Engine (totals, progress bar, category summary, chart)
-    ✔ Budget (in-memory, temporary default)
+    ✔ Budget tracking and persistence
     ✔ Edit Expense
     ✔ Delete Expense
     ✔ Local Persistence (LocalStorage)
@@ -20,11 +19,6 @@
     ✔ Custom Date Range Filter
     ✔ Filter UX Polish (default-to-Today, contextual subtitles)
     ✔ Payment Method (Cash / Digital, remembered across sessions)
-
-    Pending
-    □ Additional filter ranges (Yesterday, Last 7 Days, Last 30
-      Days, Last Month, Last Year, etc.) — architecture is ready,
-      not implemented.
 
    Implements:
      PHASE 1 — Screen navigation
@@ -40,10 +34,9 @@
                 `expenses` + `budget`. Nothing is ever incremented
                 or decremented by hand. Rendering is split into
                 one function per UI piece, each consuming the same
-                calculated object. Filter buttons are intentionally
-                left inactive — once filtering exists, it will just
-                produce a filtered array to hand to the same
-                calculation/render functions, no new plumbing needed.
+                calculated object. The active date filter and search
+                pipeline produce the list rendered by the expense
+                history and used for filter summaries.
      PHASE 5 — Expense Management (Edit + Delete). Expenses are
                 located exclusively by `expense.id` — never by
                 index, amount, category, or note. Both features end
@@ -146,7 +139,7 @@
                 Data and About Pebble — built with a generic
                 setupAccordion() helper (max-height transition,
                 measured via scrollHeight, no hardcoded heights) and
-                a footer showing the public-facing "Version 1.0".
+                a footer showing the public-facing application version.
                 CSV export (section 20) builds a Blob client-side
                 from the full `expenses` array — Date/Amount/
                 Category/Note columns, category names resolved via
@@ -173,23 +166,20 @@
                 `lastPaymentMethod` (or 'digital' if nothing has ever
                 been remembered), never to a blank/invalid state. No
                 other calculation, filter, or rendering logic changes.
-     PHASE 14 — Analytics Architecture Cleanup. The former standalone
-                analytics.js is merged into this file (see section 0,
-                PAGE ROUTING), so analytics.html now loads script.js
-                like every other page. Purely structural: no behavior
-                changes on either page, and Analytics still has no
-                charts, calculations, or data reads — those remain
-                for later Analytics tasks to add here, reusing this
-                file's existing utilities instead of duplicating them
-                in a separate file.
+    PHASE 14 — Analytics Architecture Cleanup. Both pages load this
+         shared script, and page routing keeps each page's
+         DOM-specific logic isolated. Purely structural: no
+         behavior changes on either page. Analytics now reads the shared
+                data layer and renders its month navigation, summaries,
+                trend, calendar, breakdowns, statistics, and insights
+                from this file.
      PHASE 15 — Analytics Task 2: Month Navigation. Adds the ◀ July
                 2026 ▶ selector to the top of analytics.html. One new
                 piece of state, `analyticsSelectedMonth`
                 ({year, month}), is the single source of truth every
                 later Analytics task (summary, trend, categories,
-                payment split, statistics, insights) will read
-                instead of computing its own month — none of those
-                calculations are implemented yet. stepAnalyticsMonth()
+                payment split, statistics, and insights) read instead
+                of computing their own month. stepAnalyticsMonth()
                 is the only place that mutates it, rolling the year
                 over correctly in both directions (Dec -> Jan and
                 Jan -> Dec). renderAnalyticsMonthLabel() is the only
@@ -219,10 +209,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const expenses = [];
 
-  // Temporary in-memory budget. No persistence yet — this is the
-  // one value later phases (LocalStorage, backend) will replace.
-  // Everything downstream already reads from this variable, so
-  // swapping its source later requires no changes elsewhere.
+  // Budget is kept in memory as the active source of truth and is
+  // loaded from and saved to LocalStorage with the rest of app state.
   let budget = 10000;
 
   // The most recently selected payment method (PHASE 11), one of
@@ -245,10 +233,8 @@ document.addEventListener('DOMContentLoaded', () => {
      Each category is a plain data object: { id, name, emoji, color,
      isDefault }. `color` is still just the CSS custom-property
      reference (style.css remains the one source of truth for the
-     actual palette) — it exists on the object now so a future
-     Manage Categories UI can read/display it without another schema
-     change. `isDefault` distinguishes Pebble's built-in categories
-     from ones a later phase lets a user create; nothing reads it yet.
+    actual palette). `isDefault` distinguishes Pebble's built-in
+    categories from user-created categories in Manage Categories.
 
      Categories are persisted separately from expenses, under their
      own LocalStorage key. On a first launch (or an old Pebble
@@ -256,8 +242,8 @@ document.addEventListener('DOMContentLoaded', () => {
      itself with DEFAULT_CATEGORIES and saves them immediately, so
      every later launch — including this same session's — loads from
      LocalStorage rather than re-deriving defaults in memory. This is
-     purely architectural: there is still no way to add, rename, or
-     delete a category in the UI. That's Phase B.
+    The Manage Categories UI can add and delete categories while
+    preserving this shared category data contract.
 
      Expenses are untouched by any of this — `expense.category`
      remains just the category id string it always was, never the
@@ -279,9 +265,8 @@ document.addEventListener('DOMContentLoaded', () => {
   ];
 
   // In-memory category collection + its id -> category lookup. Both
-  // are populated exclusively by loadCategories() below and never
-  // mutated directly anywhere else in this file (there's nothing yet
-  // that adds/edits/removes a category — that's Phase B).
+  // are populated by loadCategories() and updated through the category
+  // manager's add/delete operations below.
   let categories = [];
   let categoryMap = new Map();
 
@@ -374,7 +359,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /**
    * Returns the full category collection. Callers must treat this
-   * as read-only — there is no mutation path yet (Phase B).
+  * as read-only; mutations go through the category manager helpers.
    * @returns {Array<{id:string,name:string,emoji:string,color:string,isDefault:boolean}>}
    */
   function getCategories() {
@@ -730,9 +715,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* ================================================================
      1. PAGE ROUTING (PHASE 14 — Analytics Architecture Cleanup)
-     script.js is now shared by index.html and analytics.html (this
-     replaces the former standalone analytics.js). Both pages load
-     this exact same file, but every section below this point
+    script.js is shared by index.html and analytics.html. Both pages
+    load this exact same file, but every section below this point
      assumes index.html's markup — home screen, Add Expense form,
      Settings panel, and so on. analytics.html has none of those
      elements, so running that code there would throw on the first
@@ -1175,7 +1159,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateAnalyticsTrend();
 
     /* ==============================================================
-       1.35 SPENDING CALENDAR (v1.8 PHASE B)
+      1.35 SPENDING CALENDAR (v1.9.6 PHASE B)
        Read-only monthly calendar for analyticsSelectedMonth.
        Reuses getAnalyticsMonthExpenses() for filtering, and 
        currencyFormatter for amounts. No month controls of its own —
@@ -1185,7 +1169,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const spendingCalendarGridEl = document.getElementById('spending-calendar-grid');
 
-    // Exactly three visual intensity steps, per the v1.8 Phase B
+    // Exactly three visual intensity steps, per the v1.9.6 Phase B
     // redesign — LOW / MEDIUM / HIGH, each read from a small dot
     // rather than a tinted cell background. Index 0 is unused (0
     // spending) so level N maps directly to INTENSITY_LEVEL_NAMES[N].
@@ -1284,7 +1268,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const dayData = dailyData.get(day);
         const hasSpending = Boolean(dayData && dayData.total > 0);
 
-        // v1.8 Phase C: only spending days become operable — a real
+        // v1.9.6 Phase C: only spending days become operable — a real
         // <button>, so they're reachable via keyboard/assistive tech,
         // not a div with a click listener bolted on. Zero-spending
         // days stay exactly what Phase B already renders. Every
@@ -1340,7 +1324,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /* ==============================================================
-       1.36 DAY DETAIL BOTTOM SHEET (v1.8 PHASE C)
+      1.36 DAY DETAIL BOTTOM SHEET (v1.9.6 PHASE C)
        Read-only detail for a single spending day, opened by tapping
        its cell in the Spending Calendar above. Reuses
        getAnalyticsMonthExpenses()/analyticsSelectedMonth for month
@@ -2577,14 +2561,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
   /* ================================================================
-     5.5 EXPENSE EXPRESSION ENGINE (v1.9.2 — Phase B1)
+    5.5 EXPENSE EXPRESSION ENGINE (v1.9.6 — Phase B1)
      Turns a typed amount — a plain number or a simple +/-/×/÷
      expression — into the single numeric value the rest of Pebble
      already expects on expense.amount. This section is calculation
      only; it has no idea an input field or keypad exists, and knows
-     nothing about the DOM. Phase B2 is what will actually let
-     someone type "100 + 240" into the Add Expense screen and wire
-     ×/÷ buttons to it.
+    nothing about the DOM; the Add Expense screen wires the same
+    evaluator to its expression input and +/−/×/÷ controls.
 
      No eval() or Function() anywhere below — expressions are
      tokenized and evaluated by hand, in three pure steps:
@@ -2613,8 +2596,8 @@ document.addEventListener('DOMContentLoaded', () => {
    * Every character Pebble's expression syntax accepts, mapped to
    * its internal single-character operator. '*' and '/' are
    * accepted alongside the display glyphs '×' and '÷' so a
-   * plain-ASCII expression evaluates identically to one typed via a
-   * future ×/÷ button.
+  * plain-ASCII expression evaluates identically to one typed via the
+  * visible ×/÷ controls.
    */
   const EXPENSE_OPERATORS = new Map([
     ['+', '+'],
@@ -2737,8 +2720,8 @@ document.addEventListener('DOMContentLoaded', () => {
   /**
    * Turns a typed amount — "100", "99.50", or an expression like
    * "100 + 240 - 90" — into the single number Pebble stores as
-   * expense.amount. Phase B2 will point the amount field and its
-   * future ×/÷ buttons at this function; for Phase B1 it's already
+  * expense.amount. The amount field and its ×/÷ buttons call this
+  * function through the expression-aware form path; it remains
    * a drop-in replacement for the plain parseFloat() the Add/Edit
    * Expense form used before this phase, so a plain number behaves
    * exactly as it always did:
@@ -2919,7 +2902,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
   /* ================================================================
-     7C. AMOUNT EXPRESSION OPERATORS (v1.9.3 — Phase B2)
+    7C. AMOUNT EXPRESSION OPERATORS (v1.9.6 — Phase B2)
      Wires the four +/−/×/÷ buttons added under the amount input.
      Every character this row can insert is one B1's engine already
      understands — evaluateExpenseExpression() (section 5.5) treats
@@ -2964,13 +2947,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
   /* ================================================================
-     8. AMOUNT INPUT VALIDATION (PHASE 2 + v1.9.3 PHASE B2)
+    8. AMOUNT INPUT VALIDATION (PHASE 2 + v1.9.6 PHASE B2)
      ================================================================ */
 
   /**
    * Blocks the keystrokes that let a native number input accept
    * scientific notation or an explicit sign ('e', 'E', '+', '-').
-   * Budget-only as of v1.9.3 — the amount field has its own
+  * Budget-only as of v1.9.6 — the amount field has its own
    * expression-aware guard below (blockInvalidExpenseKeys()), since
    * it now needs to allow '+'/'-' as expression operators, which
    * this stricter budget-only version still rejects outright.
@@ -3013,7 +2996,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /**
    * Expression-aware counterpart to blockScientificNotationKeys()
-   * above, for the amount field only (v1.9.3 — Phase B2). The
+  * above, for the amount field only (v1.9.6 — Phase B2). The
    * accepted character set is now digits, one decimal point per
    * number segment, and the operators EXPENSE_OPERATORS (section
    * 5.5) recognizes — everything else, including 'e'/'E', is
@@ -3055,7 +3038,7 @@ document.addEventListener('DOMContentLoaded', () => {
    * point. Anything else — 'e'/'E', '+', '-', letters, symbols — is
    * discarded rather than repaired into a "closest valid" number,
    * so a paste like "1e5" becomes "15", not "100000". Budget-only as
-   * of v1.9.3 — see sanitizeExpensePaste() below for the amount
+  * of v1.9.6 — see sanitizeExpensePaste() below for the amount
    * field's broader, expression-aware version.
    * @param {string} rawText
    * @returns {string}
@@ -3078,7 +3061,7 @@ document.addEventListener('DOMContentLoaded', () => {
    * the selected range, mirroring normal paste behavior, then fires
    * a synthetic 'input' event so the existing negative-value guard
    * still runs against the result — this doesn't bypass that layer.
-   * Budget-only as of v1.9.3 — see handleExpensePaste() below for
+  * Budget-only as of v1.9.6 — see handleExpensePaste() below for
    * the amount field.
    * @param {ClipboardEvent} event
    */
@@ -3102,7 +3085,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /**
    * Paste counterpart to blockInvalidExpenseKeys() above, for the
-   * amount field only (v1.9.3 — Phase B2). Strips a pasted string
+  * amount field only (v1.9.6 — Phase B2). Strips a pasted string
    * down to digits, decimal points, and whatever EXPENSE_OPERATORS
    * (section 5.5) recognizes as an operator — the same accepted
    * alphabet typing is already held to, so a paste can't slip past
@@ -3120,7 +3103,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /**
-   * Paste handler for the amount field (v1.9.3 — Phase B2). Same
+  * Paste handler for the amount field (v1.9.6 — Phase B2). Same
    * shape as handleNumericPaste() above — replace the selected range
    * with the sanitized text, then fire a synthetic 'input' event so
    * the negative-value guard below still runs.
@@ -3443,11 +3426,10 @@ document.addEventListener('DOMContentLoaded', () => {
      recalculating anything itself — so there is exactly one place
      where "total spent" or "remaining budget" is defined.
 
-     This is what makes future Edit/Delete/Filter features safe:
-     they only need to mutate `expenses` (or `budget`) and call
-     updateDashboard() again. Nothing here assumes expenses were
-     only ever added — deleting or editing an entry and recomputing
-     from scratch works identically.
+    Add, edit, delete, and budget mutations update state and call
+    the same calculation/rendering pipeline. Nothing here assumes
+    expenses were only ever added; recomputing from current state
+    keeps dashboard values consistent after every mutation.
      ================================================================ */
 
   /**
@@ -3571,7 +3553,7 @@ document.addEventListener('DOMContentLoaded', () => {
    * budget is simply the untouched track background; no "empty"
    * element is needed.
    *
-   * v1.9.3 — Phase C: category.percentOfBudget (calculateDashboardData())
+  * v1.9.6 — Phase C: category.percentOfBudget (calculateDashboardData())
    * is deliberately left unclamped there — it's the real
    * amount/budget ratio for that category, and nothing outside this
    * function reads it. Because segments are stacked left to right,
@@ -3719,9 +3701,8 @@ document.addEventListener('DOMContentLoaded', () => {
    * month, so the budget numbers stay correct no matter what the
    * history filter is currently set to. Defaults to the full
    * `expenses` array so existing callers keep working unchanged.
-   * Any future feature that changes data (delete, edit, filter,
-   * budget update) should only touch state and then call this —
-   * nothing else.
+  * Mutations update state and call this entry point so the dashboard
+  * is recalculated and repainted from the current source of truth.
    * @param {Array} [expenseList=expenses]
    */
   function updateDashboard(expenseList = expenses) {
@@ -3936,12 +3917,8 @@ document.addEventListener('DOMContentLoaded', () => {
       expenseDetailNoteCard.hidden = true;
     }
 
-    // Budget Impact: architecture is ready (the row + its value
-    // span already exist in the markup, hidden) but there is no
-    // defined per-expense budget correlation yet, so it's never
-    // un-hidden here. A future task can populate
-    // #expense-detail-budget-impact-value and flip `hidden = false`
-    // right here without touching anything else in this function.
+    // Budget Impact remains intentionally hidden because Pebble does
+    // not define a per-expense budget correlation in the current UI.
   }
 
   /**
@@ -4049,12 +4026,9 @@ document.addEventListener('DOMContentLoaded', () => {
   addExpenseForm.addEventListener('submit', (event) => {
     event.preventDefault();
 
-    // Phase B1: the amount field still only ever contains a plain
-    // number today (native type="number", '+'/'-' keys blocked at
-    // keydown), so this behaves exactly like parseFloat() did
-    // before — but it's now the same expression-aware path Phase B2
-    // will point its future ×/÷ buttons at, with no change needed
-    // here when that lands.
+    // The amount field accepts either a plain number or a supported
+    // arithmetic expression; the evaluator returns the value stored
+    // on the expense.
     const expressionResult = evaluateExpenseExpression(amountInput.value);
     const amountValue = expressionResult.isValid ? expressionResult.value : NaN;
     const categoryValue = categoryHiddenInput.value;
@@ -4168,8 +4142,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /**
-   * Utility only — clears persisted state from LocalStorage. Not
-   * wired to any UI yet; a future Settings page will call this.
+  * Utility only — clears persisted state from LocalStorage. It is
+  * intentionally not exposed as a destructive Settings action.
    */
   function clearState() {
     try {
@@ -5937,9 +5911,9 @@ if ("serviceWorker" in navigator) {
    - CLARITY_PROJECT_ID below: replace 'YOUR_CLARITY_PROJECT_ID' with
      the real Project ID from the Microsoft Clarity dashboard's
      Setup/Overview page.
-   Until real IDs are inserted, both loaders below intentionally
-   no-op — the placeholder strings are checked for and skipped, so
-   nothing is ever sent anywhere by accident.
+  The placeholder guards remain in both loaders so a deployment with
+  unset IDs safely skips third-party requests instead of sending data
+  accidentally.
    ================================================================ */
 (function () {
   const GA4_MEASUREMENT_ID = 'G-CKB5GDN5TV';

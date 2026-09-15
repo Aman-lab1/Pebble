@@ -153,7 +153,7 @@
         <!-- Expense entries injected by script.js -->
 
         <!--
-          EXAMPLE EXPENSE CARD (reference only — not rendered, for future development)
+          EXAMPLE EXPENSE CARD (reference only — actual cards are rendered by script.js)
           <li class="expense-item" data-expense-id="">
             <span class="expense-category-icon" aria-hidden="true">🍔</span>
             <div class="expense-details">
@@ -201,7 +201,7 @@
     <!-- ==================== ADD EXPENSE FORM ==================== -->
     <form id="add-expense-form" novalidate>
 
-      <!-- Amount Input (v1.9.3 — Phase B2: type="text" so it can hold
+      <!-- Amount Input (v1.9.6 — Phase B2: type="text" so it can hold
            an expression like "100+240"; inputmode="decimal" still
            hints a numeric keyboard on mobile. Digit/decimal entry and
            backspace continue to rely on the native keyboard/text
@@ -223,7 +223,7 @@
         >
       </div>
 
-      <!-- Expression Operator Row (v1.9.3 — Phase B2). Exactly four
+      <!-- Expression Operator Row (v1.9.5 — Phase B2). Exactly four
            operators, sitting directly under the amount input. Real
            <button> elements with accessible names beyond their glyph,
            since '+', '−', '×', '÷' alone aren't reliably announced. -->
@@ -803,7 +803,7 @@
 
       <footer class="settings-panel-footer">
         <p class="settings-footer-credit">Made with ❤️ by Aman</p>
-        <p class="settings-footer-version">Version 1.8</p>
+        <p class="settings-footer-version">Version 1.9.5</p>
       </footer>
     </aside>
   </div>

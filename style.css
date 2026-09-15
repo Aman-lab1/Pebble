@@ -63,8 +63,8 @@ input {
 }
 
 /* Exceptions to the body-level "no selection" default above.
-   Every actual/future editable field (amount, note, budget, custom
-   date range, and any control added later) keeps normal text
+  Every editable field (amount, note, budget, and custom date range)
+  keeps normal text
    selection and the native iOS callout ("Copy/Paste/Select") — the
    two things users legitimately expect inside a field they can type
    into. `select` and `[contenteditable]` are included so this stays
@@ -678,7 +678,7 @@ body::-webkit-scrollbar,
   appearance: none;
 }
 
-/* -- Expression operator row (v1.9.3 — Phase B2). Sits directly
+/* -- Expression operator row. Sits directly
    under the amount input. Buttons reuse the circular .icon-btn
    shell/interaction (surface fill, border-tinted hover, scale-down
    active) at a slightly larger, easier-to-tap size, so they read as
@@ -1499,11 +1499,9 @@ input:focus-visible,
 
 
 /* ================================================================
-   20. ANALYTICS (v1.2 — TASK 1: FOUNDATION)
-   Placeholder sections only. Every rule here builds on top of the
-   existing .card / .card-label tokens above rather than introducing
-   a parallel style — so when Task 2+ fills these in with real
-   charts and stats, they inherit Pebble's look for free.
+  20. ANALYTICS
+  Analytics sections reuse the existing .card / .card-label tokens
+  so the data views remain visually consistent with the main app.
    ================================================================ */
 
 .analytics-placeholder-card {
@@ -1812,7 +1810,7 @@ input:focus-visible,
 }
 
 /* Default/no-insight state: same line, no icon, muted to read as a
-   quiet placeholder rather than an actual finding — same color
+  neutral absence of a finding — same color
    .analytics-category-name and .analytics-payment-figure-label
    already use for secondary text. */
 .analytics-insight-text-empty {
@@ -1865,7 +1863,7 @@ input:focus-visible,
 
 /* ==============================================================
    SPENDING CALENDAR (Analytics)
-   No month controls of its own (v1.8 Phase B) — it reads the same
+  No month controls of its own — it reads the same
    analyticsSelectedMonth the main Analytics month nav above drives,
    so there's nothing here to align with a second header, only the
    weekday row against the day grid below it.
@@ -1929,7 +1927,7 @@ input:focus-visible,
   box-shadow: none;
 }
 
-/* -- Interactive spending days (v1.8 Phase C) --
+/* -- Interactive spending days --
    Spending days render as a native <button> (see script.js) so they
    stay reachable and operable via keyboard/assistive tech; this is
    purely a button reset so it's pixel-identical to the plain <div>
@@ -2235,9 +2233,9 @@ button.spending-calendar-cell:focus-visible {
   margin-top: auto;
 }
 
-/* -- Day Detail Sheet (v1.8 Phase C) --
+/* -- Day Detail Sheet --
    Read-only day-expense list, opened by tapping a spending day in
-   the Spending Calendar (Phase B, frozen — untouched). Reuses the
+  the Spending Calendar. Reuses the
    .expense-detail-sheet shell above plus .expense-item and its
    children as-is; the only thing those don't already account for is
    the .bottom-sheet's own text-align: center, which every other
@@ -2557,8 +2555,8 @@ input {
 }
 
 /* Exceptions to the body-level "no selection" default above.
-   Every actual/future editable field (amount, note, budget, custom
-   date range, and any control added later) keeps normal text
+  Every editable field (amount, note, budget, and custom date range)
+  keeps normal text
    selection and the native iOS callout ("Copy/Paste/Select") — the
    two things users legitimately expect inside a field they can type
    into. `select` and `[contenteditable]` are included so this stays
@@ -3956,11 +3954,9 @@ input:focus-visible,
 
 
 /* ================================================================
-   20. ANALYTICS (v1.2 — TASK 1: FOUNDATION)
-   Placeholder sections only. Every rule here builds on top of the
-   existing .card / .card-label tokens above rather than introducing
-   a parallel style — so when Task 2+ fills these in with real
-   charts and stats, they inherit Pebble's look for free.
+  20. ANALYTICS
+  Analytics sections reuse the existing .card / .card-label tokens
+  so charts and stats inherit Pebble's visual system.
    ================================================================ */
 
 .analytics-placeholder-card {
@@ -4322,7 +4318,7 @@ input:focus-visible,
 
 /* ==============================================================
    SPENDING CALENDAR (Analytics)
-   No month controls of its own (v1.8 Phase B) — it reads the same
+  No month controls of its own — it reads the same
    analyticsSelectedMonth the main Analytics month nav above drives,
    so there's nothing here to align with a second header, only the
    weekday row against the day grid below it.
@@ -4386,7 +4382,7 @@ input:focus-visible,
   box-shadow: none;
 }
 
-/* -- Interactive spending days (v1.8 Phase C) --
+/* -- Interactive spending days --
    Spending days render as a native <button> (see script.js) so they
    stay reachable and operable via keyboard/assistive tech; this is
    purely a button reset so it's pixel-identical to the plain <div>
@@ -4692,9 +4688,9 @@ button.spending-calendar-cell:focus-visible {
   margin-top: auto;
 }
 
-/* -- Day Detail Sheet (v1.8 Phase C) --
+/* -- Day Detail Sheet --
    Read-only day-expense list, opened by tapping a spending day in
-   the Spending Calendar (Phase B, frozen — untouched). Reuses the
+  the Spending Calendar. Reuses the
    .expense-detail-sheet shell above plus .expense-item and its
    children as-is; the only thing those don't already account for is
    the .bottom-sheet's own text-align: center, which every other
