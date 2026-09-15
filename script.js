@@ -960,10 +960,30 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
+     * The calendar-day denominator for the Average summary card:
+     * today's day-of-month when `selectedMonth` is the real current
+     * month (so $0-spend days still count toward it), or the full
+     * length of the month for any past month. Reuses
+     * `isAnalyticsSelectedMonthCurrent()` (1.1 above) and the same
+     * days-in-month formula already used by Spending Trend/Calendar
+     * (1.3/1.4 below) rather than introducing new date logic.
+     * @param {{year:number, month:number}} selectedMonth
+     * @returns {number}
+     */
+    function getAnalyticsAverageDayCount(selectedMonth) {
+      const daysInMonth = new Date(selectedMonth.year, selectedMonth.month + 1, 0).getDate();
+      return isAnalyticsSelectedMonthCurrent() ? new Date().getDate() : daysInMonth;
+    }
+
+    /**
      * The one calculation function for the Summary Cards. Reads
      * only `expenseList` + `selectedMonth`; never touches the DOM.
      * With zero expenses in the month, every field is naturally 0 —
      * no special-cased branch needed for the "empty month" case.
+     * `averageExpense` is Average Daily Spending (totalSpent divided
+     * by calendar days elapsed so far this month, or by the month's
+     * full length for a past month) — despite the field name, it is
+     * no longer totalSpent / transactionCount.
      * @param {Array} expenseList
      * @param {{year:number, month:number}} selectedMonth
      * @returns {{totalSpent: number, transactionCount: number, averageExpense: number}}
@@ -973,7 +993,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const totalSpent = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
       const transactionCount = monthExpenses.length;
-      const averageExpense = transactionCount > 0 ? totalSpent / transactionCount : 0;
+      const dayCount = getAnalyticsAverageDayCount(selectedMonth);
+      const averageExpense = dayCount > 0 ? totalSpent / dayCount : 0;
 
       return { totalSpent, transactionCount, averageExpense };
     }
